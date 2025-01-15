@@ -17,15 +17,13 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/crt.h>
 
 #include <winpr/memory.h>
 
-#ifdef HAVE_UNISTD_H
+#ifdef WINPR_HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 
@@ -106,18 +104,18 @@ HANDLE OpenFileMappingW(DWORD dwDesiredAccess, BOOL bInheritHandle, LPCWSTR lpNa
 }
 
 LPVOID MapViewOfFile(HANDLE hFileMappingObject, DWORD dwDesiredAccess, DWORD dwFileOffsetHigh,
-                     DWORD dwFileOffsetLow, SIZE_T dwNumberOfBytesToMap)
+                     DWORD dwFileOffsetLow, size_t dwNumberOfBytesToMap)
 {
 	return NULL;
 }
 
 LPVOID MapViewOfFileEx(HANDLE hFileMappingObject, DWORD dwDesiredAccess, DWORD dwFileOffsetHigh,
-                       DWORD dwFileOffsetLow, SIZE_T dwNumberOfBytesToMap, LPVOID lpBaseAddress)
+                       DWORD dwFileOffsetLow, size_t dwNumberOfBytesToMap, LPVOID lpBaseAddress)
 {
 	return NULL;
 }
 
-BOOL FlushViewOfFile(LPCVOID lpBaseAddress, SIZE_T dwNumberOfBytesToFlush)
+BOOL FlushViewOfFile(LPCVOID lpBaseAddress, size_t dwNumberOfBytesToFlush)
 {
 	return TRUE;
 }

@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/handle.h>
 
@@ -38,7 +36,7 @@
 
 DWORD TlsAlloc(void)
 {
-	pthread_key_t key;
+	pthread_key_t key = 0;
 
 	if (pthread_key_create(&key, NULL) != 0)
 		return TLS_OUT_OF_INDEXES;
@@ -48,8 +46,8 @@ DWORD TlsAlloc(void)
 
 LPVOID TlsGetValue(DWORD dwTlsIndex)
 {
-	LPVOID value;
-	pthread_key_t key;
+	LPVOID value = NULL;
+	pthread_key_t key = 0;
 	key = (pthread_key_t)dwTlsIndex;
 	value = (LPVOID)pthread_getspecific(key);
 	return value;
@@ -57,7 +55,7 @@ LPVOID TlsGetValue(DWORD dwTlsIndex)
 
 BOOL TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue)
 {
-	pthread_key_t key;
+	pthread_key_t key = 0;
 	key = (pthread_key_t)dwTlsIndex;
 	pthread_setspecific(key, lpTlsValue);
 	return TRUE;
@@ -65,7 +63,7 @@ BOOL TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue)
 
 BOOL TlsFree(DWORD dwTlsIndex)
 {
-	pthread_key_t key;
+	pthread_key_t key = 0;
 	key = (pthread_key_t)dwTlsIndex;
 	pthread_key_delete(key);
 	return TRUE;

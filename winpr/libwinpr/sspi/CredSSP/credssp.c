@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/crt.h>
 #include <winpr/sspi.h>
@@ -27,7 +25,7 @@
 #include "credssp.h"
 
 #include "../sspi.h"
-#include "../log.h"
+#include "../../log.h"
 
 #define TAG WINPR_TAG("sspi.CredSSP")
 
@@ -38,7 +36,7 @@ static SECURITY_STATUS SEC_ENTRY credssp_InitializeSecurityContextW(
     ULONG Reserved1, ULONG TargetDataRep, PSecBufferDesc pInput, ULONG Reserved2,
     PCtxtHandle phNewContext, PSecBufferDesc pOutput, PULONG pfContextAttr, PTimeStamp ptsExpiry)
 {
-	WLog_ERR(TAG, "[%s]: TODO: Implement", __FUNCTION__);
+	WLog_ERR(TAG, "TODO: Implement");
 	return SEC_E_UNSUPPORTED_FUNCTION;
 }
 
@@ -47,12 +45,22 @@ static SECURITY_STATUS SEC_ENTRY credssp_InitializeSecurityContextA(
     ULONG Reserved1, ULONG TargetDataRep, PSecBufferDesc pInput, ULONG Reserved2,
     PCtxtHandle phNewContext, PSecBufferDesc pOutput, PULONG pfContextAttr, PTimeStamp ptsExpiry)
 {
-	CREDSSP_CONTEXT* context;
-	SSPI_CREDENTIALS* credentials;
+	CREDSSP_CONTEXT* context = NULL;
+	SSPI_CREDENTIALS* credentials = NULL;
+
+	/* behave like windows SSPIs that don't want empty context */
+	if (phContext && !phContext->dwLower && !phContext->dwUpper)
+		return SEC_E_INVALID_HANDLE;
+
 	context = (CREDSSP_CONTEXT*)sspi_SecureHandleGetLowerPointer(phContext);
 
 	if (!context)
 	{
+		union
+		{
+			const void* cpv;
+			void* pv;
+		} cnv;
 		context = credssp_ContextNew();
 
 		if (!context)
@@ -67,7 +75,9 @@ static SECURITY_STATUS SEC_ENTRY credssp_InitializeSecurityContextA(
 		}
 
 		sspi_SecureHandleSetLowerPointer(phNewContext, context);
-		sspi_SecureHandleSetUpperPointer(phNewContext, (void*)CREDSSP_PACKAGE_NAME);
+
+		cnv.cpv = CREDSSP_PACKAGE_NAME;
+		sspi_SecureHandleSetUpperPointer(phNewContext, cnv.pv);
 	}
 
 	return SEC_E_OK;
@@ -75,7 +85,7 @@ static SECURITY_STATUS SEC_ENTRY credssp_InitializeSecurityContextA(
 
 CREDSSP_CONTEXT* credssp_ContextNew(void)
 {
-	CREDSSP_CONTEXT* context;
+	CREDSSP_CONTEXT* context = NULL;
 	context = (CREDSSP_CONTEXT*)calloc(1, sizeof(CREDSSP_CONTEXT));
 
 	if (!context)
@@ -98,7 +108,7 @@ static SECURITY_STATUS SEC_ENTRY credssp_QueryContextAttributes(PCtxtHandle phCo
 	if (!pBuffer)
 		return SEC_E_INSUFFICIENT_MEMORY;
 
-	WLog_ERR(TAG, "[%s]: TODO: Implement", __FUNCTION__);
+	WLog_ERR(TAG, "TODO: Implement");
 	return SEC_E_UNSUPPORTED_FUNCTION;
 }
 
@@ -107,7 +117,7 @@ static SECURITY_STATUS SEC_ENTRY credssp_AcquireCredentialsHandleW(
     void* pAuthData, SEC_GET_KEY_FN pGetKeyFn, void* pvGetKeyArgument, PCredHandle phCredential,
     PTimeStamp ptsExpiry)
 {
-	WLog_ERR(TAG, "[%s]: TODO: Implement", __FUNCTION__);
+	WLog_ERR(TAG, "TODO: Implement");
 	return SEC_E_UNSUPPORTED_FUNCTION;
 }
 
@@ -116,11 +126,16 @@ static SECURITY_STATUS SEC_ENTRY credssp_AcquireCredentialsHandleA(
     void* pAuthData, SEC_GET_KEY_FN pGetKeyFn, void* pvGetKeyArgument, PCredHandle phCredential,
     PTimeStamp ptsExpiry)
 {
-	SSPI_CREDENTIALS* credentials;
-	SEC_WINNT_AUTH_IDENTITY* identity;
+	SSPI_CREDENTIALS* credentials = NULL;
+	SEC_WINNT_AUTH_IDENTITY* identity = NULL;
 
 	if (fCredentialUse == SECPKG_CRED_OUTBOUND)
 	{
+		union
+		{
+			const void* cpv;
+			void* pv;
+		} cnv;
 		credentials = sspi_CredentialsNew();
 
 		if (!credentials)
@@ -129,11 +144,13 @@ static SECURITY_STATUS SEC_ENTRY credssp_AcquireCredentialsHandleA(
 		identity = (SEC_WINNT_AUTH_IDENTITY*)pAuthData;
 		CopyMemory(&(credentials->identity), identity, sizeof(SEC_WINNT_AUTH_IDENTITY));
 		sspi_SecureHandleSetLowerPointer(phCredential, (void*)credentials);
-		sspi_SecureHandleSetUpperPointer(phCredential, (void*)CREDSSP_PACKAGE_NAME);
+
+		cnv.cpv = CREDSSP_PACKAGE_NAME;
+		sspi_SecureHandleSetUpperPointer(phCredential, cnv.pv);
 		return SEC_E_OK;
 	}
 
-	WLog_ERR(TAG, "[%s]: TODO: Implement", __FUNCTION__);
+	WLog_ERR(TAG, "TODO: Implement");
 	return SEC_E_UNSUPPORTED_FUNCTION;
 }
 
@@ -141,7 +158,7 @@ static SECURITY_STATUS SEC_ENTRY credssp_QueryCredentialsAttributesW(PCredHandle
                                                                      ULONG ulAttribute,
                                                                      void* pBuffer)
 {
-	WLog_ERR(TAG, "[%s]: TODO: Implement", __FUNCTION__);
+	WLog_ERR(TAG, "TODO: Implement");
 	return SEC_E_UNSUPPORTED_FUNCTION;
 }
 
@@ -160,13 +177,13 @@ static SECURITY_STATUS SEC_ENTRY credssp_QueryCredentialsAttributesA(PCredHandle
 		return SEC_E_OK;
 	}
 
-	WLog_ERR(TAG, "[%s]: TODO: Implement", __FUNCTION__);
+	WLog_ERR(TAG, "TODO: Implement");
 	return SEC_E_UNSUPPORTED_FUNCTION;
 }
 
 static SECURITY_STATUS SEC_ENTRY credssp_FreeCredentialsHandle(PCredHandle phCredential)
 {
-	SSPI_CREDENTIALS* credentials;
+	SSPI_CREDENTIALS* credentials = NULL;
 
 	if (!phCredential)
 		return SEC_E_INVALID_HANDLE;
@@ -183,7 +200,7 @@ static SECURITY_STATUS SEC_ENTRY credssp_FreeCredentialsHandle(PCredHandle phCre
 static SECURITY_STATUS SEC_ENTRY credssp_EncryptMessage(PCtxtHandle phContext, ULONG fQOP,
                                                         PSecBufferDesc pMessage, ULONG MessageSeqNo)
 {
-	WLog_ERR(TAG, "[%s]: TODO: Implement", __FUNCTION__);
+	WLog_ERR(TAG, "TODO: Implement");
 	return SEC_E_UNSUPPORTED_FUNCTION;
 }
 
@@ -191,14 +208,14 @@ static SECURITY_STATUS SEC_ENTRY credssp_DecryptMessage(PCtxtHandle phContext,
                                                         PSecBufferDesc pMessage, ULONG MessageSeqNo,
                                                         ULONG* pfQOP)
 {
-	WLog_ERR(TAG, "[%s]: TODO: Implement", __FUNCTION__);
+	WLog_ERR(TAG, "TODO: Implement");
 	return SEC_E_UNSUPPORTED_FUNCTION;
 }
 
 static SECURITY_STATUS SEC_ENTRY credssp_MakeSignature(PCtxtHandle phContext, ULONG fQOP,
                                                        PSecBufferDesc pMessage, ULONG MessageSeqNo)
 {
-	WLog_ERR(TAG, "[%s]: TODO: Implement", __FUNCTION__);
+	WLog_ERR(TAG, "TODO: Implement");
 	return SEC_E_UNSUPPORTED_FUNCTION;
 }
 
@@ -206,12 +223,12 @@ static SECURITY_STATUS SEC_ENTRY credssp_VerifySignature(PCtxtHandle phContext,
                                                          PSecBufferDesc pMessage,
                                                          ULONG MessageSeqNo, ULONG* pfQOP)
 {
-	WLog_ERR(TAG, "[%s]: TODO: Implement", __FUNCTION__);
+	WLog_ERR(TAG, "TODO: Implement");
 	return SEC_E_UNSUPPORTED_FUNCTION;
 }
 
 const SecurityFunctionTableA CREDSSP_SecurityFunctionTableA = {
-	1,                                   /* dwVersion */
+	3,                                   /* dwVersion */
 	NULL,                                /* EnumerateSecurityPackages */
 	credssp_QueryCredentialsAttributesA, /* QueryCredentialsAttributes */
 	credssp_AcquireCredentialsHandleA,   /* AcquireCredentialsHandle */
@@ -239,10 +256,11 @@ const SecurityFunctionTableA CREDSSP_SecurityFunctionTableA = {
 	credssp_EncryptMessage,              /* EncryptMessage */
 	credssp_DecryptMessage,              /* DecryptMessage */
 	NULL,                                /* SetContextAttributes */
+	NULL,                                /* SetCredentialsAttributes */
 };
 
 const SecurityFunctionTableW CREDSSP_SecurityFunctionTableW = {
-	1,                                   /* dwVersion */
+	3,                                   /* dwVersion */
 	NULL,                                /* EnumerateSecurityPackages */
 	credssp_QueryCredentialsAttributesW, /* QueryCredentialsAttributes */
 	credssp_AcquireCredentialsHandleW,   /* AcquireCredentialsHandle */
@@ -270,6 +288,7 @@ const SecurityFunctionTableW CREDSSP_SecurityFunctionTableW = {
 	credssp_EncryptMessage,              /* EncryptMessage */
 	credssp_DecryptMessage,              /* DecryptMessage */
 	NULL,                                /* SetContextAttributes */
+	NULL,                                /* SetCredentialsAttributes */
 };
 
 const SecPkgInfoA CREDSSP_SecPkgInfoA = {
@@ -281,18 +300,23 @@ const SecPkgInfoA CREDSSP_SecPkgInfoA = {
 	"Microsoft CredSSP Security Provider" /* Comment */
 };
 
-static WCHAR CREDSSP_SecPkgInfoW_Name[] = { 'C', 'R', 'E', 'D', 'S', 'S', 'P', '\0' };
-
-static WCHAR CREDSSP_SecPkgInfoW_Comment[] = { 'M', 'i', 'c', 'r', 'o', 's', 'o', 'f', 't',
-	                                           ' ', 'C', 'r', 'e', 'd', 'S', 'S', 'P', ' ',
-	                                           'S', 'e', 'c', 'u', 'r', 'i', 't', 'y', ' ',
-	                                           'P', 'r', 'o', 'v', 'i', 'd', 'e', 'r', '\0' };
+static WCHAR CREDSSP_SecPkgInfoW_NameBuffer[128] = { 0 };
+static WCHAR CREDSSP_SecPkgInfoW_CommentBuffer[128] = { 0 };
 
 const SecPkgInfoW CREDSSP_SecPkgInfoW = {
-	0x000110733,                /* fCapabilities */
-	1,                          /* wVersion */
-	0xFFFF,                     /* wRPCID */
-	0x000090A8,                 /* cbMaxToken */
-	CREDSSP_SecPkgInfoW_Name,   /* Name */
-	CREDSSP_SecPkgInfoW_Comment /* Comment */
+	0x000110733,                      /* fCapabilities */
+	1,                                /* wVersion */
+	0xFFFF,                           /* wRPCID */
+	0x000090A8,                       /* cbMaxToken */
+	CREDSSP_SecPkgInfoW_NameBuffer,   /* Name */
+	CREDSSP_SecPkgInfoW_CommentBuffer /* Comment */
 };
+
+BOOL CREDSSP_init(void)
+{
+	InitializeConstWCharFromUtf8(CREDSSP_SecPkgInfoA.Name, CREDSSP_SecPkgInfoW_NameBuffer,
+	                             ARRAYSIZE(CREDSSP_SecPkgInfoW_NameBuffer));
+	InitializeConstWCharFromUtf8(CREDSSP_SecPkgInfoA.Comment, CREDSSP_SecPkgInfoW_CommentBuffer,
+	                             ARRAYSIZE(CREDSSP_SecPkgInfoW_CommentBuffer));
+	return TRUE;
+}

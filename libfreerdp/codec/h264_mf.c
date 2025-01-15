@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include <winpr/winpr.h>
 #include <freerdp/log.h>
 #include <freerdp/codec/h264.h>
 
@@ -72,7 +73,7 @@ typedef HRESULT(__stdcall* pfnMFCreateSample)(IMFSample** ppIMFSample);
 typedef HRESULT(__stdcall* pfnMFCreateMemoryBuffer)(DWORD cbMaxLength, IMFMediaBuffer** ppBuffer);
 typedef HRESULT(__stdcall* pfnMFCreateMediaType)(IMFMediaType** ppMFType);
 
-struct _H264_CONTEXT_MF
+typedef struct
 {
 	ICodecAPI* codecApi;
 	IMFTransform* transform;
@@ -89,8 +90,7 @@ struct _H264_CONTEXT_MF
 	pfnMFCreateSample MFCreateSample;
 	pfnMFCreateMemoryBuffer MFCreateMemoryBuffer;
 	pfnMFCreateMediaType MFCreateMediaType;
-};
-typedef struct _H264_CONTEXT_MF H264_CONTEXT_MF;
+} H264_CONTEXT_MF;
 
 static HRESULT mf_find_output_type(H264_CONTEXT_MF* sys, const GUID* guid,
                                    IMFMediaType** ppMediaType)
@@ -375,7 +375,7 @@ static int mf_decompress(H264_CONTEXT* h264, const BYTE* pSrcData, UINT32 SrcSiz
 	inputSample->lpVtbl->Release(inputSample);
 	return 1;
 error:
-	fprintf(stderr, "mf_decompress error\n");
+	(void)fprintf(stderr, "mf_decompress error\n");
 	return -1;
 }
 
@@ -394,7 +394,6 @@ static BOOL mf_plat_loaded(H264_CONTEXT_MF* sys)
 
 static void mf_uninit(H264_CONTEXT* h264)
 {
-	UINT32 x;
 	H264_CONTEXT_MF* sys = (H264_CONTEXT_MF*)h264->pSystemData;
 
 	if (sys)
@@ -441,8 +440,8 @@ static void mf_uninit(H264_CONTEXT* h264)
 				CoUninitialize();
 		}
 
-		for (x = 0; x < sizeof(h264->pYUVData) / sizeof(h264->pYUVData[0]); x++)
-			_aligned_free(h264->pYUVData[x]);
+		for (size_t x = 0; x < sizeof(h264->pYUVData) / sizeof(h264->pYUVData[0]); x++)
+			winpr_aligned_free(h264->pYUVData[x]);
 
 		memset(h264->pYUVData, 0, sizeof(h264->pYUVData));
 		memset(h264->iStride, 0, sizeof(h264->iStride));
@@ -468,12 +467,13 @@ static BOOL mf_init(H264_CONTEXT* h264)
 	if (!sys->mfplat)
 		goto error;
 
-	sys->MFStartup = (pfnMFStartup)GetProcAddress(sys->mfplat, "MFStartup");
-	sys->MFShutdown = (pfnMFShutdown)GetProcAddress(sys->mfplat, "MFShutdown");
-	sys->MFCreateSample = (pfnMFCreateSample)GetProcAddress(sys->mfplat, "MFCreateSample");
+	sys->MFStartup = GetProcAddressAs(sys->mfplat, "MFStartup", pfnMFStartup);
+	sys->MFShutdown = GetProcAddressAs(sys->mfplat, "MFShutdown", pfnMFShutdown);
+	sys->MFCreateSample = GetProcAddressAs(sys->mfplat, "MFCreateSample", pfnMFCreateSample);
 	sys->MFCreateMemoryBuffer =
-	    (pfnMFCreateMemoryBuffer)GetProcAddress(sys->mfplat, "MFCreateMemoryBuffer");
-	sys->MFCreateMediaType = (pfnMFCreateMediaType)GetProcAddress(sys->mfplat, "MFCreateMediaType");
+	    GetProcAddressAs(sys->mfplat, "MFCreateMemoryBuffer", pfnMFCreateMemoryBuffer);
+	sys->MFCreateMediaType =
+	    GetProcAddressAs(sys->mfplat, "MFCreateMediaType", pfnMFCreateMediaType);
 
 	if (!mf_plat_loaded(sys))
 		goto error;
@@ -593,5 +593,5 @@ error:
 	return FALSE;
 }
 
-H264_CONTEXT_SUBSYSTEM g_Subsystem_MF = { "MediaFoundation", mf_init, mf_uninit, mf_decompress,
-	                                      mf_compress };
+const H264_CONTEXT_SUBSYSTEM g_Subsystem_MF = { "MediaFoundation", mf_init, mf_uninit,
+	                                            mf_decompress, mf_compress };

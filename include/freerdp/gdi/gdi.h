@@ -25,9 +25,10 @@
 #include <winpr/wlog.h>
 
 #include <freerdp/api.h>
+#include <freerdp/types.h>
+
 #include <freerdp/log.h>
-#include <freerdp/freerdp.h>
-#include <freerdp/cache/cache.h>
+#include <freerdp/types.h>
 #include <freerdp/codec/color.h>
 #include <freerdp/codec/region.h>
 
@@ -356,182 +357,172 @@
 #define COMPLEXREGION 0x03
 #endif
 
-struct _GDIOBJECT
-{
-	BYTE objectType;
-};
-typedef struct _GDIOBJECT GDIOBJECT;
-typedef GDIOBJECT* HGDIOBJECT;
-
-struct _GDI_RECT
-{
-	BYTE objectType;
-	INT32 left;
-	INT32 top;
-	INT32 right;
-	INT32 bottom;
-};
-typedef struct _GDI_RECT GDI_RECT;
-typedef GDI_RECT* HGDI_RECT;
-
-struct _GDI_RGN
-{
-	BYTE objectType;
-	INT32 x;   /* left */
-	INT32 y;   /* top */
-	INT32 w;   /* width */
-	INT32 h;   /* height */
-	BOOL null; /* null region */
-};
-typedef struct _GDI_RGN GDI_RGN;
-typedef GDI_RGN* HGDI_RGN;
-
-struct _GDI_BITMAP
-{
-	BYTE objectType;
-	UINT32 format;
-	INT32 width;
-	INT32 height;
-	UINT32 scanline;
-	BYTE* data;
-	void (*free)(void*);
-};
-typedef struct _GDI_BITMAP GDI_BITMAP;
-typedef GDI_BITMAP* HGDI_BITMAP;
-
-struct _GDI_PEN
-{
-	BYTE objectType;
-	UINT32 style;
-	INT32 width;
-	INT32 posX;
-	INT32 posY;
-	UINT32 color;
-	UINT32 format;
-	const gdiPalette* palette;
-};
-typedef struct _GDI_PEN GDI_PEN;
-typedef GDI_PEN* HGDI_PEN;
-
-struct _GDI_PALETTEENTRY
-{
-	BYTE red;
-	BYTE green;
-	BYTE blue;
-};
-typedef struct _GDI_PALETTEENTRY GDI_PALETTEENTRY;
-
-struct _GDI_PALETTE
-{
-	UINT16 count;
-	GDI_PALETTEENTRY* entries;
-};
-typedef struct _GDI_PALETTE GDI_PALETTE;
-typedef GDI_PALETTE* HGDI_PALETTE;
-
-struct _GDI_POINT
-{
-	INT32 x;
-	INT32 y;
-};
-typedef struct _GDI_POINT GDI_POINT;
-typedef GDI_POINT* HGDI_POINT;
-
-struct _GDI_BRUSH
-{
-	BYTE objectType;
-	int style;
-	HGDI_BITMAP pattern;
-	UINT32 color;
-	INT32 nXOrg;
-	INT32 nYOrg;
-};
-typedef struct _GDI_BRUSH GDI_BRUSH;
-typedef GDI_BRUSH* HGDI_BRUSH;
-
-struct _GDI_WND
-{
-	UINT32 count;
-	INT32 ninvalid;
-	HGDI_RGN invalid;
-	HGDI_RGN cinvalid;
-};
-typedef struct _GDI_WND GDI_WND;
-typedef GDI_WND* HGDI_WND;
-
-struct _GDI_DC
-{
-	HGDIOBJECT selectedObject;
-	UINT32 format;
-	UINT32 bkColor;
-	UINT32 textColor;
-	HGDI_BRUSH brush;
-	HGDI_RGN clip;
-	HGDI_PEN pen;
-	HGDI_WND hwnd;
-	INT32 drawMode;
-	INT32 bkMode;
-};
-typedef struct _GDI_DC GDI_DC;
-typedef GDI_DC* HGDI_DC;
-
-struct gdi_bitmap
-{
-	rdpBitmap _p;
-
-	HGDI_DC hdc;
-	HGDI_BITMAP bitmap;
-	HGDI_BITMAP org_bitmap;
-};
-typedef struct gdi_bitmap gdiBitmap;
-
-struct gdi_glyph
-{
-	rdpBitmap _p;
-
-	HGDI_DC hdc;
-	HGDI_BITMAP bitmap;
-	HGDI_BITMAP org_bitmap;
-};
-typedef struct gdi_glyph gdiGlyph;
-
-struct rdp_gdi
-{
-	rdpContext* context;
-
-	INT32 width;
-	INT32 height;
-	UINT32 stride;
-	UINT32 dstFormat;
-	UINT32 cursor_x;
-	UINT32 cursor_y;
-
-	HGDI_DC hdc;
-	gdiBitmap* primary;
-	gdiBitmap* drawing;
-	UINT32 bitmap_size;
-	UINT32 bitmap_stride;
-	BYTE* primary_buffer;
-	gdiPalette palette;
-	gdiBitmap* image;
-	void (*free)(void*);
-
-	BOOL inGfxFrame;
-	BOOL graphicsReset; /* deprecated, remove with FreeRDP v3 */
-	BOOL suppressOutput;
-	UINT16 outputSurfaceId;
-	UINT32 frameId;
-	RdpgfxClientContext* gfx;
-	VideoClientContext* video;
-	GeometryClientContext* geometry;
-
-	wLog* log;
-};
-
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+	typedef struct
+	{
+		BYTE objectType;
+	} GDIOBJECT;
+	typedef GDIOBJECT* HGDIOBJECT;
+
+	typedef struct
+	{
+		BYTE objectType;
+		INT32 left;
+		INT32 top;
+		INT32 right;
+		INT32 bottom;
+	} GDI_RECT;
+	typedef GDI_RECT* HGDI_RECT;
+
+	typedef struct
+	{
+		BYTE objectType;
+		INT32 x;   /* left */
+		INT32 y;   /* top */
+		INT32 w;   /* width */
+		INT32 h;   /* height */
+		BOOL null; /* null region */
+	} GDI_RGN;
+	typedef GDI_RGN* HGDI_RGN;
+
+	typedef struct
+	{
+		BYTE objectType;
+		UINT32 format;
+		INT32 width;
+		INT32 height;
+		UINT32 scanline;
+		BYTE* data;
+		void (*free)(void*);
+	} GDI_BITMAP;
+	typedef GDI_BITMAP* HGDI_BITMAP;
+
+	typedef struct
+	{
+		BYTE objectType;
+		UINT32 style;
+		INT32 width;
+		INT32 posX;
+		INT32 posY;
+		UINT32 color;
+		UINT32 format;
+		const gdiPalette* palette;
+	} GDI_PEN;
+	typedef GDI_PEN* HGDI_PEN;
+
+	typedef struct
+	{
+		BYTE red;
+		BYTE green;
+		BYTE blue;
+	} GDI_PALETTEENTRY;
+
+	typedef struct
+	{
+		UINT16 count;
+		GDI_PALETTEENTRY* entries;
+	} GDI_PALETTE;
+	typedef GDI_PALETTE* HGDI_PALETTE;
+
+	typedef struct
+	{
+		INT32 x;
+		INT32 y;
+	} GDI_POINT;
+	typedef GDI_POINT* HGDI_POINT;
+
+	typedef struct
+	{
+		BYTE objectType;
+		int style;
+		HGDI_BITMAP pattern;
+		UINT32 color;
+		INT32 nXOrg;
+		INT32 nYOrg;
+	} GDI_BRUSH;
+	typedef GDI_BRUSH* HGDI_BRUSH;
+
+	typedef struct
+	{
+		UINT32 count;
+		INT32 ninvalid;
+		HGDI_RGN invalid;
+		HGDI_RGN cinvalid;
+	} GDI_WND;
+	typedef GDI_WND* HGDI_WND;
+
+	typedef struct
+	{
+		HGDIOBJECT selectedObject;
+		UINT32 format;
+		UINT32 bkColor;
+		UINT32 textColor;
+		HGDI_BRUSH brush;
+		HGDI_RGN clip;
+		HGDI_PEN pen;
+		HGDI_WND hwnd;
+		INT32 drawMode;
+		INT32 bkMode;
+	} GDI_DC;
+	typedef GDI_DC* HGDI_DC;
+
+	struct gdi_bitmap
+	{
+		rdpBitmap _p;
+
+		HGDI_DC hdc;
+		HGDI_BITMAP bitmap;
+		HGDI_BITMAP org_bitmap;
+	};
+	typedef struct gdi_bitmap gdiBitmap;
+
+	struct gdi_glyph
+	{
+		rdpBitmap _p;
+
+		HGDI_DC hdc;
+		HGDI_BITMAP bitmap;
+		HGDI_BITMAP org_bitmap;
+	};
+	typedef struct gdi_glyph gdiGlyph;
+
+	struct rdp_gdi
+	{
+		rdpContext* context;
+
+		INT32 width;
+		INT32 height;
+		UINT32 stride;
+		UINT32 dstFormat;
+		UINT32 cursor_x;
+		UINT32 cursor_y;
+
+		HGDI_DC hdc;
+		gdiBitmap* primary;
+		gdiBitmap* drawing;
+		UINT32 bitmap_size;
+		UINT32 bitmap_stride;
+		BYTE* primary_buffer;
+		gdiPalette palette;
+		gdiBitmap* image;
+		void (*free)(void*);
+
+		BOOL inGfxFrame;
+		BOOL graphicsReset; /* deprecated, remove with FreeRDP v3 */
+		BOOL suppressOutput;
+		UINT16 outputSurfaceId;
+		UINT32 frameId;
+		RdpgfxClientContext* gfx;
+		VideoClientContext* video;
+		GeometryClientContext* geometry;
+
+		wLog* log;
+	};
+	typedef struct rdp_gdi rdpGdi;
 
 	FREERDP_API DWORD gdi_rop3_code(BYTE code);
 	FREERDP_API const char* gdi_rop3_code_string(BYTE code);

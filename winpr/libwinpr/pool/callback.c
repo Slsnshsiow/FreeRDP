@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/crt.h>
 #include <winpr/pool.h>
@@ -28,16 +26,16 @@
 #ifdef WINPR_THREAD_POOL
 
 #ifdef _WIN32
+typedef BOOL(WINAPI* pCallbackMayRunLong_t)(PTP_CALLBACK_INSTANCE pci);
 static INIT_ONCE init_once_module = INIT_ONCE_STATIC_INIT;
-static BOOL(WINAPI* pCallbackMayRunLong)(PTP_CALLBACK_INSTANCE pci);
+static pCallbackMayRunLong_t pCallbackMayRunLong = NULL;
 
 static BOOL CALLBACK init_module(PINIT_ONCE once, PVOID param, PVOID* context)
 {
 	HMODULE kernel32 = LoadLibraryA("kernel32.dll");
 	if (kernel32)
-	{
-		pCallbackMayRunLong = (void*)GetProcAddress(kernel32, "CallbackMayRunLong");
-	}
+		pCallbackMayRunLong =
+		    GetProcAddressAs(kernel32, "CallbackMayRunLong", pCallbackMayRunLong_t);
 	return TRUE;
 }
 #endif

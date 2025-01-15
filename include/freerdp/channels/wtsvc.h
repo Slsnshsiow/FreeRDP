@@ -52,17 +52,26 @@ extern "C"
 		DRDYNVC_STATE_FAILED = 3
 	};
 
+	typedef BOOL (*psDVCCreationStatusCallback)(void* userdata, UINT32 channelId,
+	                                            INT32 creationStatus);
+
 	/**
 	 * WTSVirtualChannelManager functions are FreeRDP extensions to the API.
 	 */
-
-	FREERDP_API void WTSVirtualChannelManagerGetFileDescriptor(HANDLE hServer, void** fds,
-	                                                           int* fds_count);
+#if defined(WITH_FREERDP_DEPRECATED)
+	FREERDP_API WINPR_DEPRECATED_VAR(
+	    "Use WTSVirtualChannelManagerGetEventHandle",
+	    void WTSVirtualChannelManagerGetFileDescriptor(HANDLE hServer, void** fds, int* fds_count));
+#endif
+	FREERDP_API BOOL WTSVirtualChannelManagerOpen(HANDLE hServer);
 	FREERDP_API BOOL WTSVirtualChannelManagerCheckFileDescriptor(HANDLE hServer);
 	FREERDP_API BOOL WTSVirtualChannelManagerCheckFileDescriptorEx(HANDLE hServer, BOOL autoOpen);
 	FREERDP_API HANDLE WTSVirtualChannelManagerGetEventHandle(HANDLE hServer);
 	FREERDP_API BOOL WTSVirtualChannelManagerIsChannelJoined(HANDLE hServer, const char* name);
 	FREERDP_API BYTE WTSVirtualChannelManagerGetDrdynvcState(HANDLE hServer);
+	FREERDP_API void WTSVirtualChannelManagerSetDVCCreationCallback(HANDLE hServer,
+	                                                                psDVCCreationStatusCallback cb,
+	                                                                void* userdata);
 
 	/**
 	 * Extended FreeRDP WTS functions for channel handling
@@ -78,6 +87,9 @@ extern "C"
 	FREERDP_API void* WTSChannelGetHandleById(freerdp_peer* client, const UINT16 channel_id);
 	FREERDP_API const char* WTSChannelGetName(freerdp_peer* client, UINT16 channel_id);
 	FREERDP_API char** WTSGetAcceptedChannelNames(freerdp_peer* client, size_t* count);
+	FREERDP_API INT64 WTSChannelGetOptions(freerdp_peer* client, UINT16 channel_id);
+
+	FREERDP_API UINT32 WTSChannelGetIdByHandle(HANDLE hChannelHandle);
 
 #ifdef __cplusplus
 }

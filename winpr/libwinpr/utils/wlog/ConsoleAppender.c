@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include "ConsoleAppender.h"
 #include "Message.h"
@@ -33,13 +31,12 @@
 #define WLOG_CONSOLE_STDERR 2
 #define WLOG_CONSOLE_DEBUG 4
 
-struct _wLogConsoleAppender
+typedef struct
 {
 	WLOG_APPENDER_COMMON();
 
 	int outputStream;
-};
-typedef struct _wLogConsoleAppender wLogConsoleAppender;
+} wLogConsoleAppender;
 
 static BOOL WLog_ConsoleAppender_Open(wLog* log, wLogAppender* appender)
 {
@@ -54,9 +51,9 @@ static BOOL WLog_ConsoleAppender_Close(wLog* log, wLogAppender* appender)
 static BOOL WLog_ConsoleAppender_WriteMessage(wLog* log, wLogAppender* appender,
                                               wLogMessage* message)
 {
-	FILE* fp;
-	char prefix[WLOG_MAX_PREFIX_SIZE];
-	wLogConsoleAppender* consoleAppender;
+	FILE* fp = NULL;
+	char prefix[WLOG_MAX_PREFIX_SIZE] = { 0 };
+	wLogConsoleAppender* consoleAppender = NULL;
 	if (!appender)
 		return FALSE;
 
@@ -68,12 +65,9 @@ static BOOL WLog_ConsoleAppender_WriteMessage(wLog* log, wLogAppender* appender,
 #ifdef _WIN32
 	if (consoleAppender->outputStream == WLOG_CONSOLE_DEBUG)
 	{
-		char MessageString[4096];
-
-		sprintf_s(MessageString, sizeof(MessageString), "%s%s\n", message->PrefixString,
-		          message->TextString);
-
-		OutputDebugStringA(MessageString);
+		OutputDebugStringA(message->PrefixString);
+		OutputDebugStringA(message->TextString);
+		OutputDebugStringA("\n");
 
 		return TRUE;
 	}
@@ -137,7 +131,7 @@ static BOOL WLog_ConsoleAppender_WriteMessage(wLog* log, wLogAppender* appender,
 	}
 
 	if (message->Level != WLOG_OFF)
-		fprintf(fp, "%s%s\n", message->PrefixString, message->TextString);
+		(void)fprintf(fp, "%s%s\n", message->PrefixString, message->TextString);
 #endif
 	return TRUE;
 }
@@ -150,8 +144,8 @@ static BOOL WLog_ConsoleAppender_WriteDataMessage(wLog* log, wLogAppender* appen
 #if defined(ANDROID)
 	return FALSE;
 #else
-	int DataId;
-	char* FullFileName;
+	int DataId = 0;
+	char* FullFileName = NULL;
 
 	DataId = g_DataId++;
 	FullFileName = WLog_Message_GetOutputFileName(DataId, "dat");
@@ -172,8 +166,8 @@ static BOOL WLog_ConsoleAppender_WriteImageMessage(wLog* log, wLogAppender* appe
 #if defined(ANDROID)
 	return FALSE;
 #else
-	int ImageId;
-	char* FullFileName;
+	int ImageId = 0;
+	char* FullFileName = NULL;
 
 	ImageId = g_ImageId++;
 	FullFileName = WLog_Message_GetOutputFileName(ImageId, "bmp");
@@ -195,7 +189,7 @@ static BOOL WLog_ConsoleAppender_WritePacketMessage(wLog* log, wLogAppender* app
 #if defined(ANDROID)
 	return FALSE;
 #else
-	char* FullFileName;
+	char* FullFileName = NULL;
 
 	g_PacketId++;
 
@@ -221,7 +215,7 @@ static BOOL WLog_ConsoleAppender_Set(wLogAppender* appender, const char* setting
 	if (!value || (strnlen(value, 2) == 0))
 		return FALSE;
 
-	if (strcmp("outputstream", setting))
+	if (strcmp("outputstream", setting) != 0)
 		return FALSE;
 
 	if (!strcmp("stdout", value))
@@ -253,7 +247,7 @@ static void WLog_ConsoleAppender_Free(wLogAppender* appender)
 
 wLogAppender* WLog_ConsoleAppender_New(wLog* log)
 {
-	wLogConsoleAppender* ConsoleAppender;
+	wLogConsoleAppender* ConsoleAppender = NULL;
 
 	ConsoleAppender = (wLogConsoleAppender*)calloc(1, sizeof(wLogConsoleAppender));
 

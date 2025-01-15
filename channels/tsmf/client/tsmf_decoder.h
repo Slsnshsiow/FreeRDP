@@ -23,7 +23,7 @@
 
 #include "tsmf_types.h"
 
-typedef enum _ITSMFControlMsg
+typedef enum
 {
 	Control_Pause,
 	Control_Resume,
@@ -31,9 +31,9 @@ typedef enum _ITSMFControlMsg
 	Control_Stop
 } ITSMFControlMsg;
 
-typedef struct _ITSMFDecoder ITSMFDecoder;
+typedef struct s_ITSMFDecoder ITSMFDecoder;
 
-struct _ITSMFDecoder
+struct s_ITSMFDecoder
 {
 	/* Set the decoder format. Return true if supported. */
 	BOOL (*SetFormat)(ITSMFDecoder* decoder, TS_AM_MEDIA_TYPE* media_type);
@@ -47,7 +47,7 @@ struct _ITSMFDecoder
 	BOOL (*GetDecodedDimension)(ITSMFDecoder* decoder, UINT32* width, UINT32* height);
 	/* Free the decoder */
 	void (*Free)(ITSMFDecoder* decoder);
-	/* Optional Contol function */
+	/* Optional Control function */
 	BOOL (*Control)(ITSMFDecoder* decoder, ITSMFControlMsg control_msg, UINT32* arg);
 	/* Decode a sample with extended interface. */
 	BOOL(*DecodeEx)
@@ -57,8 +57,8 @@ struct _ITSMFDecoder
 	UINT64 (*GetRunningTime)(ITSMFDecoder* decoder);
 	/* Update Gstreamer Rendering Area */
 	BOOL(*UpdateRenderingArea)
-	(ITSMFDecoder* decoder, int newX, int newY, int newWidth, int newHeight, int numRectangles,
-	 RDP_RECT* rectangles);
+	(ITSMFDecoder* decoder, UINT32 newX, UINT32 newY, UINT32 newWidth, UINT32 newHeight,
+	 UINT32 numRectangles, const RECTANGLE_32* rectangles);
 	/* Change Gstreamer Audio Volume */
 	BOOL (*ChangeVolume)(ITSMFDecoder* decoder, UINT32 newVolume, UINT32 muted);
 	/* Check buffer level */
@@ -70,7 +70,7 @@ struct _ITSMFDecoder
 };
 
 #define TSMF_DECODER_EXPORT_FUNC_NAME "TSMFDecoderEntry"
-typedef ITSMFDecoder* (*TSMF_DECODER_ENTRY)(void);
+typedef UINT(VCAPITYPE* TSMF_DECODER_ENTRY)(ITSMFDecoder** decoder);
 
 ITSMFDecoder* tsmf_load_decoder(const char* name, TS_AM_MEDIA_TYPE* media_type);
 BOOL tsmf_check_decoder_available(const char* name);

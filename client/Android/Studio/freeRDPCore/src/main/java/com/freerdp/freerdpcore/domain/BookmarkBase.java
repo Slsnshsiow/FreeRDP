@@ -282,7 +282,6 @@ public class BookmarkBase implements Parcelable, Cloneable
 		editor.putBoolean("bookmark.console_mode", advancedSettings.getConsoleMode());
 
 		editor.putBoolean("bookmark.async_channel", debugSettings.getAsyncChannel());
-		editor.putBoolean("bookmark.async_input", debugSettings.getAsyncInput());
 		editor.putBoolean("bookmark.async_update", debugSettings.getAsyncUpdate());
 		editor.putString("bookmark.debug_level", debugSettings.getDebugLevel());
 
@@ -303,8 +302,8 @@ public class BookmarkBase implements Parcelable, Cloneable
 		                             sharedPrefs.getInt("bookmark.height", 600));
 
 		performanceFlags.setRemoteFX(sharedPrefs.getBoolean("bookmark.perf_remotefx", false));
-		performanceFlags.setGfx(sharedPrefs.getBoolean("bookmark.perf_gfx", false));
-		performanceFlags.setH264(sharedPrefs.getBoolean("bookmark.perf_gfx_h264", false));
+		performanceFlags.setGfx(sharedPrefs.getBoolean("bookmark.perf_gfx", true));
+		performanceFlags.setH264(sharedPrefs.getBoolean("bookmark.perf_gfx_h264", true));
 		performanceFlags.setWallpaper(sharedPrefs.getBoolean("bookmark.perf_wallpaper", false));
 		performanceFlags.setFontSmoothing(
 		    sharedPrefs.getBoolean("bookmark.perf_font_smoothing", false));
@@ -355,7 +354,6 @@ public class BookmarkBase implements Parcelable, Cloneable
 		advancedSettings.setConsoleMode(sharedPrefs.getBoolean("bookmark.console_mode", false));
 
 		debugSettings.setAsyncChannel(sharedPrefs.getBoolean("bookmark.async_channel", true));
-		debugSettings.setAsyncInput(sharedPrefs.getBoolean("bookmark.async_input", true));
 		debugSettings.setAsyncUpdate(sharedPrefs.getBoolean("bookmark.async_update", true));
 		debugSettings.setDebugLevel(sharedPrefs.getString("bookmark.debug_level", "INFO"));
 	}
@@ -401,8 +399,8 @@ public class BookmarkBase implements Parcelable, Cloneable
 		public PerformanceFlags()
 		{
 			remotefx = false;
-			gfx = false;
-			h264 = false;
+			gfx = true;
+			h264 = true;
 			wallpaper = false;
 			theming = false;
 			fullWindowDrag = false;
@@ -756,7 +754,6 @@ public class BookmarkBase implements Parcelable, Cloneable
 		private String debug;
 		private boolean asyncChannel;
 		private boolean asyncTransport;
-		private boolean asyncInput;
 		private boolean asyncUpdate;
 
 		public DebugSettings()
@@ -769,7 +766,6 @@ public class BookmarkBase implements Parcelable, Cloneable
 		{
 			asyncChannel = parcel.readInt() == 1;
 			asyncTransport = parcel.readInt() == 1;
-			asyncInput = parcel.readInt() == 1;
 			asyncUpdate = parcel.readInt() == 1;
 			debug = parcel.readString();
 		}
@@ -779,7 +775,6 @@ public class BookmarkBase implements Parcelable, Cloneable
 			debug = "INFO";
 			asyncChannel = true;
 			asyncTransport = false;
-			asyncInput = true;
 			asyncUpdate = true;
 		}
 
@@ -819,16 +814,6 @@ public class BookmarkBase implements Parcelable, Cloneable
 			asyncUpdate = enabled;
 		}
 
-		public boolean getAsyncInput()
-		{
-			return asyncInput;
-		}
-
-		public void setAsyncInput(boolean enabled)
-		{
-			asyncInput = enabled;
-		}
-
 		public boolean getAsyncChannel()
 		{
 			return asyncChannel;
@@ -848,7 +833,6 @@ public class BookmarkBase implements Parcelable, Cloneable
 		{
 			out.writeInt(asyncChannel ? 1 : 0);
 			out.writeInt(asyncTransport ? 1 : 0);
-			out.writeInt(asyncInput ? 1 : 0);
 			out.writeInt(asyncUpdate ? 1 : 0);
 			out.writeString(debug);
 		}
