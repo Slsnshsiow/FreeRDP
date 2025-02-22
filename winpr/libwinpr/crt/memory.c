@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/crt.h>
 
@@ -28,7 +26,7 @@
 
 #ifndef _WIN32
 
-PVOID SecureZeroMemory(PVOID ptr, SIZE_T cnt)
+PVOID SecureZeroMemory(PVOID ptr, size_t cnt)
 {
 	volatile BYTE* p = ptr;
 

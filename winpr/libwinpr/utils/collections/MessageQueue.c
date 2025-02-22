@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/crt.h>
 #include <winpr/sysinfo.h>
@@ -27,7 +25,7 @@
 
 #include <winpr/collections.h>
 
-struct _wMessageQueue
+struct s_wMessageQueue
 {
 	size_t head;
 	size_t tail;
@@ -73,7 +71,10 @@ HANDLE MessageQueue_Event(wMessageQueue* queue)
 size_t MessageQueue_Size(wMessageQueue* queue)
 {
 	WINPR_ASSERT(queue);
-	return queue->size;
+	EnterCriticalSection(&queue->lock);
+	const size_t ret = queue->size;
+	LeaveCriticalSection(&queue->lock);
+	return ret;
 }
 
 /**
@@ -97,7 +98,7 @@ static BOOL MessageQueue_EnsureCapacity(wMessageQueue* queue, size_t count)
 
 	if (queue->size + count >= queue->capacity)
 	{
-		wMessage* new_arr;
+		wMessage* new_arr = NULL;
 		size_t old_capacity = queue->capacity;
 		size_t new_capacity = queue->capacity * 2;
 
@@ -124,7 +125,7 @@ static BOOL MessageQueue_EnsureCapacity(wMessageQueue* queue, size_t count)
 
 BOOL MessageQueue_Dispatch(wMessageQueue* queue, const wMessage* message)
 {
-	wMessage* dst;
+	wMessage* dst = NULL;
 	BOOL ret = FALSE;
 	WINPR_ASSERT(queue);
 
@@ -148,7 +149,7 @@ BOOL MessageQueue_Dispatch(wMessageQueue* queue, const wMessage* message)
 	queue->size++;
 
 	if (queue->size > 0)
-		SetEvent(queue->event);
+		(void)SetEvent(queue->event);
 
 	if (message->id == WMQ_QUIT)
 		queue->closed = TRUE;
@@ -161,7 +162,7 @@ out:
 
 BOOL MessageQueue_Post(wMessageQueue* queue, void* context, UINT32 type, void* wParam, void* lParam)
 {
-	wMessage message;
+	wMessage message = { 0 };
 
 	message.context = context;
 	message.id = type;
@@ -194,7 +195,7 @@ int MessageQueue_Get(wMessageQueue* queue, wMessage* message)
 		queue->size--;
 
 		if (queue->size < 1)
-			ResetEvent(queue->event);
+			(void)ResetEvent(queue->event);
 
 		status = (message->id != WMQ_QUIT) ? 1 : 0;
 	}
@@ -223,7 +224,7 @@ int MessageQueue_Peek(wMessageQueue* queue, wMessage* message, BOOL remove)
 			queue->size--;
 
 			if (queue->size < 1)
-				ResetEvent(queue->event);
+				(void)ResetEvent(queue->event);
 		}
 	}
 
@@ -260,7 +261,10 @@ wMessageQueue* MessageQueue_New(const wObject* callback)
 	return queue;
 
 fail:
+	WINPR_PRAGMA_DIAG_PUSH
+	WINPR_PRAGMA_DIAG_IGNORED_MISMATCHED_DEALLOC
 	MessageQueue_Free(queue);
+	WINPR_PRAGMA_DIAG_POP
 	return NULL;
 }
 
@@ -272,7 +276,7 @@ void MessageQueue_Free(wMessageQueue* queue)
 	if (queue->event)
 		MessageQueue_Clear(queue);
 
-	CloseHandle(queue->event);
+	(void)CloseHandle(queue->event);
 	DeleteCriticalSection(&queue->lock);
 
 	free(queue->array);
@@ -303,7 +307,7 @@ int MessageQueue_Clear(wMessageQueue* queue)
 		queue->head = (queue->head + 1) % queue->capacity;
 		queue->size--;
 	}
-	ResetEvent(queue->event);
+	(void)ResetEvent(queue->event);
 	queue->closed = FALSE;
 
 	LeaveCriticalSection(&queue->lock);

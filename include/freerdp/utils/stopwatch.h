@@ -23,19 +23,18 @@
 #include <freerdp/api.h>
 #include <freerdp/types.h>
 
-struct _STOPWATCH
-{
-	UINT64 start;
-	UINT64 end;
-	UINT64 elapsed;
-	UINT32 count;
-};
-typedef struct _STOPWATCH STOPWATCH;
-
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+	typedef struct
+	{
+		UINT64 start;
+		UINT64 end;
+		UINT64 elapsed;
+		UINT32 count;
+	} STOPWATCH;
 
 	FREERDP_API STOPWATCH* stopwatch_create(void);
 	FREERDP_API void stopwatch_free(STOPWATCH* stopwatch);

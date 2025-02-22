@@ -24,27 +24,34 @@
 #include <freerdp/dvc.h>
 #include <freerdp/types.h>
 
+/** The command line name of the channel
+ *
+ *  \since version 3.0.0
+ */
+#define RDPGFX_CHANNEL_NAME "rdpgfx"
 #define RDPGFX_DVC_CHANNEL_NAME "Microsoft::Windows::RDS::Graphics"
 
-/**
- * Common Data Types
- */
-
-struct _RDPGFX_POINT16
+#ifdef __cplusplus
+extern "C"
 {
-	UINT16 x;
-	UINT16 y;
-};
-typedef struct _RDPGFX_POINT16 RDPGFX_POINT16;
+#endif
+	/**
+	 * Common Data Types
+	 */
 
-struct _RDPGFX_COLOR32
-{
-	BYTE B;
-	BYTE G;
-	BYTE R;
-	BYTE XA;
-};
-typedef struct _RDPGFX_COLOR32 RDPGFX_COLOR32;
+	typedef struct
+	{
+		UINT16 x;
+		UINT16 y;
+	} RDPGFX_POINT16;
+
+	typedef struct
+	{
+		BYTE B;
+		BYTE G;
+		BYTE R;
+		BYTE XA;
+	} RDPGFX_COLOR32;
 
 #define GFX_PIXEL_FORMAT_XRGB_8888 0x20
 #define GFX_PIXEL_FORMAT_ARGB_8888 0x21
@@ -79,13 +86,12 @@ typedef BYTE RDPGFX_PIXELFORMAT;
 
 #define RDPGFX_HEADER_SIZE 8
 
-struct _RDPGFX_HEADER
+typedef struct
 {
 	UINT16 cmdId;
 	UINT16 flags;
 	UINT32 pduLength;
-};
-typedef struct _RDPGFX_HEADER RDPGFX_HEADER;
+} RDPGFX_HEADER;
 
 /**
  * Capability Sets [MS-RDPEGFX] 2.2.3
@@ -99,50 +105,52 @@ typedef struct _RDPGFX_HEADER RDPGFX_HEADER;
 #define RDPGFX_CAPVERSION_103 0x000A0301 /** [MS-RDPEGFX] 2.2.3.6 */
 #define RDPGFX_CAPVERSION_104 0x000A0400 /** [MS-RDPEGFX] 2.2.3.7 */
 #define RDPGFX_CAPVERSION_105 0x000A0502 /** [MS-RDPEGFX] 2.2.3.8 */
-#define RDPGFX_CAPVERSION_106                                           \
-	0x000A0600 /** [MS-RDPEGFX] 2.2.3.9, [MS-RDPEGFX-errata] 2018-12-10 \
+#define RDPGFX_CAPVERSION_106                                               \
+	0x000A0600 /** [MS-RDPEGFX] 2.2.3.9 (the value in the doc is wrong, see \
+	            * [MS-RDPEGFX]-180912-errata]                               \
+	            * Since this is/was documented for a long time, also define \
+	            * the incorrect value in case some server actually uses it. \
 	            */
+#define RDPGFX_CAPVERSION_106_ERR 0x000A0601
+#define RDPGFX_CAPVERSION_107 0x000A0701 /** [MS-RDPEGFX] 2.2.3.10 */
 
-#define RDPGFX_NUMBER_CAPSETS 9
+#define RDPGFX_NUMBER_CAPSETS 11
 #define RDPGFX_CAPSET_BASE_SIZE 8
 
-struct _RDPGFX_CAPSET
+typedef struct
 {
 	UINT32 version;
 	UINT32 length;
 	UINT32 flags;
-};
-typedef struct _RDPGFX_CAPSET RDPGFX_CAPSET;
+} RDPGFX_CAPSET;
 
-#define RDPGFX_CAPS_FLAG_THINCLIENT 0x00000001U     /* 8.0+ */
-#define RDPGFX_CAPS_FLAG_SMALL_CACHE 0x00000002U    /* 8.0+ */
-#define RDPGFX_CAPS_FLAG_AVC420_ENABLED 0x00000010U /* 8.1+ */
-#define RDPGFX_CAPS_FLAG_AVC_DISABLED 0x00000020U   /* 10.0+ */
-#define RDPGFX_CAPS_FLAG_AVC_THINCLIENT 0x00000040U /* 10.3+ */
+#define RDPGFX_CAPS_FLAG_THINCLIENT 0x00000001U        /* 8.0+ */
+#define RDPGFX_CAPS_FLAG_SMALL_CACHE 0x00000002U       /* 8.0+ */
+#define RDPGFX_CAPS_FLAG_AVC420_ENABLED 0x00000010U    /* 8.1+ */
+#define RDPGFX_CAPS_FLAG_AVC_DISABLED 0x00000020U      /* 10.0+ */
+#define RDPGFX_CAPS_FLAG_AVC_THINCLIENT 0x00000040U    /* 10.3+ */
+#define RDPGFX_CAPS_FLAG_SCALEDMAP_DISABLE 0x00000080U /* 10.7+ */
 
-struct _RDPGFX_CAPSET_VERSION8
+typedef struct
 {
 	UINT32 version;
 	UINT32 capsDataLength;
 	UINT32 flags;
-};
-typedef struct _RDPGFX_CAPSET_VERSION8 RDPGFX_CAPSET_VERSION8;
+} RDPGFX_CAPSET_VERSION8;
 
-struct _RDPGFX_CAPSET_VERSION81
+typedef struct
 {
 	UINT32 version;
 	UINT32 capsDataLength;
 	UINT32 flags;
-};
-typedef struct _RDPGFX_CAPSET_VERSION81 RDPGFX_CAPSET_VERSION81;
+} RDPGFX_CAPSET_VERSION81;
 
-struct _RDPGFX_CAPSET_VERSION10
+typedef struct
 {
 	UINT32 version;
 	UINT32 capsDataLength;
 	UINT32 flags;
-};
-typedef struct _RDPGFX_CAPSET_VERSION10 RDPGFX_CAPSET_VERSION10;
+} RDPGFX_CAPSET_VERSION10;
 
 /**
  * Graphics Messages
@@ -159,7 +167,7 @@ typedef struct _RDPGFX_CAPSET_VERSION10 RDPGFX_CAPSET_VERSION10;
 
 #define RDPGFX_WIRE_TO_SURFACE_PDU_1_SIZE 17
 
-struct _RDPGFX_WIRE_TO_SURFACE_PDU_1
+typedef struct
 {
 	UINT16 surfaceId;
 	UINT16 codecId;
@@ -167,15 +175,14 @@ struct _RDPGFX_WIRE_TO_SURFACE_PDU_1
 	RECTANGLE_16 destRect;
 	UINT32 bitmapDataLength;
 	BYTE* bitmapData;
-};
-typedef struct _RDPGFX_WIRE_TO_SURFACE_PDU_1 RDPGFX_WIRE_TO_SURFACE_PDU_1;
+} RDPGFX_WIRE_TO_SURFACE_PDU_1;
 
 #define RDPGFX_CODECID_CAPROGRESSIVE 0x0009
 #define RDPGFX_CODECID_CAPROGRESSIVE_V2 0x000D
 
 #define RDPGFX_WIRE_TO_SURFACE_PDU_2_SIZE 13
 
-struct _RDPGFX_WIRE_TO_SURFACE_PDU_2
+typedef struct
 {
 	UINT16 surfaceId;
 	UINT16 codecId;
@@ -183,10 +190,9 @@ struct _RDPGFX_WIRE_TO_SURFACE_PDU_2
 	RDPGFX_PIXELFORMAT pixelFormat;
 	UINT32 bitmapDataLength;
 	BYTE* bitmapData;
-};
-typedef struct _RDPGFX_WIRE_TO_SURFACE_PDU_2 RDPGFX_WIRE_TO_SURFACE_PDU_2;
+} RDPGFX_WIRE_TO_SURFACE_PDU_2;
 
-struct _RDPGFX_SURFACE_COMMAND
+typedef struct
 {
 	UINT32 surfaceId;
 	UINT32 codecId;
@@ -201,121 +207,107 @@ struct _RDPGFX_SURFACE_COMMAND
 	UINT32 length;
 	BYTE* data;
 	void* extra;
-};
-typedef struct _RDPGFX_SURFACE_COMMAND RDPGFX_SURFACE_COMMAND;
+} RDPGFX_SURFACE_COMMAND;
 
-struct _RDPGFX_DELETE_ENCODING_CONTEXT_PDU
+typedef struct
 {
 	UINT16 surfaceId;
 	UINT32 codecContextId;
-};
-typedef struct _RDPGFX_DELETE_ENCODING_CONTEXT_PDU RDPGFX_DELETE_ENCODING_CONTEXT_PDU;
+} RDPGFX_DELETE_ENCODING_CONTEXT_PDU;
 
-struct _RDPGFX_SOLID_FILL_PDU
+typedef struct
 {
 	UINT16 surfaceId;
 	RDPGFX_COLOR32 fillPixel;
 	UINT16 fillRectCount;
 	RECTANGLE_16* fillRects;
-};
-typedef struct _RDPGFX_SOLID_FILL_PDU RDPGFX_SOLID_FILL_PDU;
+} RDPGFX_SOLID_FILL_PDU;
 
-struct _RDPGFX_SURFACE_TO_SURFACE_PDU
+typedef struct
 {
 	UINT16 surfaceIdSrc;
 	UINT16 surfaceIdDest;
 	RECTANGLE_16 rectSrc;
 	UINT16 destPtsCount;
 	RDPGFX_POINT16* destPts;
-};
-typedef struct _RDPGFX_SURFACE_TO_SURFACE_PDU RDPGFX_SURFACE_TO_SURFACE_PDU;
+} RDPGFX_SURFACE_TO_SURFACE_PDU;
 
-struct _RDPGFX_SURFACE_TO_CACHE_PDU
+typedef struct
 {
 	UINT16 surfaceId;
 	UINT64 cacheKey;
 	UINT16 cacheSlot;
 	RECTANGLE_16 rectSrc;
-};
-typedef struct _RDPGFX_SURFACE_TO_CACHE_PDU RDPGFX_SURFACE_TO_CACHE_PDU;
+} RDPGFX_SURFACE_TO_CACHE_PDU;
 
-struct _RDPGFX_CACHE_TO_SURFACE_PDU
+typedef struct
 {
 	UINT16 cacheSlot;
 	UINT16 surfaceId;
 	UINT16 destPtsCount;
 	RDPGFX_POINT16* destPts;
-};
-typedef struct _RDPGFX_CACHE_TO_SURFACE_PDU RDPGFX_CACHE_TO_SURFACE_PDU;
+} RDPGFX_CACHE_TO_SURFACE_PDU;
 
-struct _RDPGFX_EVICT_CACHE_ENTRY_PDU
+typedef struct
 {
 	UINT16 cacheSlot;
-};
-typedef struct _RDPGFX_EVICT_CACHE_ENTRY_PDU RDPGFX_EVICT_CACHE_ENTRY_PDU;
+} RDPGFX_EVICT_CACHE_ENTRY_PDU;
 
-struct _RDPGFX_CREATE_SURFACE_PDU
+typedef struct
 {
 	UINT16 surfaceId;
 	UINT16 width;
 	UINT16 height;
 	RDPGFX_PIXELFORMAT pixelFormat;
-};
-typedef struct _RDPGFX_CREATE_SURFACE_PDU RDPGFX_CREATE_SURFACE_PDU;
+} RDPGFX_CREATE_SURFACE_PDU;
 
-struct _RDPGFX_DELETE_SURFACE_PDU
+typedef struct
 {
 	UINT16 surfaceId;
-};
-typedef struct _RDPGFX_DELETE_SURFACE_PDU RDPGFX_DELETE_SURFACE_PDU;
+} RDPGFX_DELETE_SURFACE_PDU;
 
 #define RDPGFX_START_FRAME_PDU_SIZE 8
 
-struct _RDPGFX_START_FRAME_PDU
+typedef struct
 {
 	UINT32 timestamp;
 	UINT32 frameId;
-};
-typedef struct _RDPGFX_START_FRAME_PDU RDPGFX_START_FRAME_PDU;
+} RDPGFX_START_FRAME_PDU;
 
 #define RDPGFX_END_FRAME_PDU_SIZE 4
 
-struct _RDPGFX_END_FRAME_PDU
+typedef struct
 {
 	UINT32 frameId;
-};
-typedef struct _RDPGFX_END_FRAME_PDU RDPGFX_END_FRAME_PDU;
+} RDPGFX_END_FRAME_PDU;
 
 #define QUEUE_DEPTH_UNAVAILABLE 0x00000000
 #define SUSPEND_FRAME_ACKNOWLEDGEMENT 0xFFFFFFFF
 
-struct _RDPGFX_FRAME_ACKNOWLEDGE_PDU
+typedef struct
 {
 	UINT32 queueDepth;
 	UINT32 frameId;
 	UINT32 totalFramesDecoded;
-};
-typedef struct _RDPGFX_FRAME_ACKNOWLEDGE_PDU RDPGFX_FRAME_ACKNOWLEDGE_PDU;
+} RDPGFX_FRAME_ACKNOWLEDGE_PDU;
 
-struct _RDPGFX_RESET_GRAPHICS_PDU
+typedef struct
 {
 	UINT32 width;
 	UINT32 height;
 	UINT32 monitorCount;
 	MONITOR_DEF* monitorDefArray;
-};
-typedef struct _RDPGFX_RESET_GRAPHICS_PDU RDPGFX_RESET_GRAPHICS_PDU;
+} RDPGFX_RESET_GRAPHICS_PDU;
 
-struct _RDPGFX_MAP_SURFACE_TO_OUTPUT_PDU
+typedef struct
 {
 	UINT16 surfaceId;
 	UINT16 reserved;
 	UINT32 outputOriginX;
 	UINT32 outputOriginY;
-};
-typedef struct _RDPGFX_MAP_SURFACE_TO_OUTPUT_PDU RDPGFX_MAP_SURFACE_TO_OUTPUT_PDU;
+} RDPGFX_MAP_SURFACE_TO_OUTPUT_PDU;
 
-struct _RDPGFX_MAP_SURFACE_TO_SCALED_OUTPUT_PDU
+typedef struct
 {
 	UINT16 surfaceId;
 	UINT16 reserved;
@@ -323,53 +315,48 @@ struct _RDPGFX_MAP_SURFACE_TO_SCALED_OUTPUT_PDU
 	UINT32 outputOriginY;
 	UINT32 targetWidth;
 	UINT32 targetHeight;
-};
-typedef struct _RDPGFX_MAP_SURFACE_TO_SCALED_OUTPUT_PDU RDPGFX_MAP_SURFACE_TO_SCALED_OUTPUT_PDU;
+} RDPGFX_MAP_SURFACE_TO_SCALED_OUTPUT_PDU;
 
-struct _RDPGFX_CACHE_ENTRY_METADATA
+typedef struct
 {
 	UINT64 cacheKey;
 	UINT32 bitmapLength;
-};
-typedef struct _RDPGFX_CACHE_ENTRY_METADATA RDPGFX_CACHE_ENTRY_METADATA;
+} RDPGFX_CACHE_ENTRY_METADATA;
 
-struct _RDPGFX_CACHE_IMPORT_OFFER_PDU
+#define RDPGFX_CACHE_ENTRY_MAX_COUNT 5462
+
+typedef struct
 {
 	UINT16 cacheEntriesCount;
-	RDPGFX_CACHE_ENTRY_METADATA* cacheEntries;
-};
-typedef struct _RDPGFX_CACHE_IMPORT_OFFER_PDU RDPGFX_CACHE_IMPORT_OFFER_PDU;
+	RDPGFX_CACHE_ENTRY_METADATA cacheEntries[RDPGFX_CACHE_ENTRY_MAX_COUNT];
+} RDPGFX_CACHE_IMPORT_OFFER_PDU;
 
-struct _RDPGFX_CACHE_IMPORT_REPLY_PDU
+typedef struct
 {
 	UINT16 importedEntriesCount;
-	UINT16* cacheSlots;
-};
-typedef struct _RDPGFX_CACHE_IMPORT_REPLY_PDU RDPGFX_CACHE_IMPORT_REPLY_PDU;
+	UINT16 cacheSlots[RDPGFX_CACHE_ENTRY_MAX_COUNT];
+} RDPGFX_CACHE_IMPORT_REPLY_PDU;
 
-struct _RDPGFX_CAPS_ADVERTISE_PDU
+typedef struct
 {
 	UINT16 capsSetCount;
 	RDPGFX_CAPSET* capsSets;
-};
-typedef struct _RDPGFX_CAPS_ADVERTISE_PDU RDPGFX_CAPS_ADVERTISE_PDU;
+} RDPGFX_CAPS_ADVERTISE_PDU;
 
-struct _RDPGFX_CAPS_CONFIRM_PDU
+typedef struct
 {
 	RDPGFX_CAPSET* capsSet;
-};
-typedef struct _RDPGFX_CAPS_CONFIRM_PDU RDPGFX_CAPS_CONFIRM_PDU;
+} RDPGFX_CAPS_CONFIRM_PDU;
 
-struct _RDPGFX_MAP_SURFACE_TO_WINDOW_PDU
+typedef struct
 {
 	UINT16 surfaceId;
 	UINT64 windowId;
 	UINT32 mappedWidth;
 	UINT32 mappedHeight;
-};
-typedef struct _RDPGFX_MAP_SURFACE_TO_WINDOW_PDU RDPGFX_MAP_SURFACE_TO_WINDOW_PDU;
+} RDPGFX_MAP_SURFACE_TO_WINDOW_PDU;
 
-struct _RDPGFX_MAP_SURFACE_TO_SCALED_WINDOW_PDU
+typedef struct
 {
 	UINT16 surfaceId;
 	UINT64 windowId;
@@ -377,12 +364,11 @@ struct _RDPGFX_MAP_SURFACE_TO_SCALED_WINDOW_PDU
 	UINT32 mappedHeight;
 	UINT32 targetWidth;
 	UINT32 targetHeight;
-};
-typedef struct _RDPGFX_MAP_SURFACE_TO_SCALED_WINDOW_PDU RDPGFX_MAP_SURFACE_TO_SCALED_WINDOW_PDU;
+} RDPGFX_MAP_SURFACE_TO_SCALED_WINDOW_PDU;
 
 /* H264 */
 
-struct _RDPGFX_H264_QUANT_QUALITY
+typedef struct
 {
 	BYTE qpVal;
 	BYTE qualityVal;
@@ -390,40 +376,38 @@ struct _RDPGFX_H264_QUANT_QUALITY
 	BYTE qp;
 	BYTE r;
 	BYTE p;
-};
-typedef struct _RDPGFX_H264_QUANT_QUALITY RDPGFX_H264_QUANT_QUALITY;
+} RDPGFX_H264_QUANT_QUALITY;
 
-struct _RDPGFX_H264_METABLOCK
+typedef struct
 {
 	UINT32 numRegionRects;
 	RECTANGLE_16* regionRects;
 	RDPGFX_H264_QUANT_QUALITY* quantQualityVals;
-};
-typedef struct _RDPGFX_H264_METABLOCK RDPGFX_H264_METABLOCK;
+} RDPGFX_H264_METABLOCK;
 
-struct _RDPGFX_AVC420_BITMAP_STREAM
+typedef struct
 {
 	RDPGFX_H264_METABLOCK meta;
 	UINT32 length;
 	BYTE* data;
-};
-typedef struct _RDPGFX_AVC420_BITMAP_STREAM RDPGFX_AVC420_BITMAP_STREAM;
+} RDPGFX_AVC420_BITMAP_STREAM;
 
-struct _RDPGFX_AVC444_BITMAP_STREAM
+typedef struct
 {
 	UINT32 cbAvc420EncodedBitstream1;
 	BYTE LC;
 	RDPGFX_AVC420_BITMAP_STREAM bitstream[2];
-};
-typedef struct _RDPGFX_AVC444_BITMAP_STREAM RDPGFX_AVC444_BITMAP_STREAM;
+} RDPGFX_AVC444_BITMAP_STREAM;
 
-struct _RDPGFX_QOE_FRAME_ACKNOWLEDGE_PDU
+typedef struct
 {
 	UINT32 frameId;
 	UINT32 timestamp;
 	UINT16 timeDiffSE;
 	UINT16 timeDiffEDR;
-};
-typedef struct _RDPGFX_QOE_FRAME_ACKNOWLEDGE_PDU RDPGFX_QOE_FRAME_ACKNOWLEDGE_PDU;
+} RDPGFX_QOE_FRAME_ACKNOWLEDGE_PDU;
 
+#ifdef __cplusplus
+}
+#endif
 #endif /* FREERDP_CHANNEL_RDPGFX_H */

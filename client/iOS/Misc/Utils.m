@@ -14,7 +14,7 @@
 
 #import <freerdp/input.h>
 #import <freerdp/version.h>
-#import "config.h"
+#import <freerdp/config.h>
 
 #include <sys/types.h>
 #include <sys/sysctl.h>
@@ -130,7 +130,7 @@ NSArray *ResolutionModes()
 
 NSString *LocalizedAutomaticSecurity()
 {
-	return NSLocalizedString(@"Automatic", @"Automatic protocl security selection");
+	return NSLocalizedString(@"Automatic", @"Automatic protocol security selection");
 }
 
 NSString *ProtocolSecurityDescription(TSXProtocolSecurityOptions type)

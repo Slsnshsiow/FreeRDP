@@ -17,14 +17,12 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/collections.h>
 #include <winpr/assert.h>
 
-struct _wStack
+struct s_wStack
 {
 	size_t size;
 	size_t capacity;
@@ -49,7 +47,7 @@ struct _wStack
 
 size_t Stack_Count(wStack* stack)
 {
-	size_t ret;
+	size_t ret = 0;
 	WINPR_ASSERT(stack);
 	if (stack->synchronized)
 		EnterCriticalSection(&stack->lock);
@@ -88,13 +86,11 @@ wObject* Stack_Object(wStack* stack)
 
 void Stack_Clear(wStack* stack)
 {
-	size_t index;
-
 	WINPR_ASSERT(stack);
 	if (stack->synchronized)
 		EnterCriticalSection(&stack->lock);
 
-	for (index = 0; index < stack->size; index++)
+	for (size_t index = 0; index < stack->size; index++)
 	{
 		if (stack->object.fnObjectFree)
 			stack->object.fnObjectFree(stack->array[index]);
@@ -114,14 +110,13 @@ void Stack_Clear(wStack* stack)
 
 BOOL Stack_Contains(wStack* stack, const void* obj)
 {
-	size_t i;
 	BOOL found = FALSE;
 
 	WINPR_ASSERT(stack);
 	if (stack->synchronized)
 		EnterCriticalSection(&stack->lock);
 
-	for (i = 0; i < stack->size; i++)
+	for (size_t i = 0; i < stack->size; i++)
 	{
 		if (stack->object.fnObjectEquals(stack->array[i], obj))
 		{
@@ -149,7 +144,7 @@ void Stack_Push(wStack* stack, void* obj)
 	if ((stack->size + 1) >= stack->capacity)
 	{
 		const size_t new_cap = stack->capacity * 2;
-		void** new_arr = (void**)realloc(stack->array, sizeof(void*) * new_cap);
+		void** new_arr = (void**)realloc((void*)stack->array, sizeof(void*) * new_cap);
 
 		if (!new_arr)
 			goto end;
@@ -237,7 +232,10 @@ wStack* Stack_New(BOOL synchronized)
 
 	return stack;
 out_free:
+	WINPR_PRAGMA_DIAG_PUSH
+	WINPR_PRAGMA_DIAG_IGNORED_MISMATCHED_DEALLOC
 	Stack_Free(stack);
+	WINPR_PRAGMA_DIAG_POP
 	return NULL;
 }
 
@@ -248,7 +246,7 @@ void Stack_Free(wStack* stack)
 		if (stack->synchronized)
 			DeleteCriticalSection(&stack->lock);
 
-		free(stack->array);
+		free((void*)stack->array);
 		free(stack);
 	}
 }

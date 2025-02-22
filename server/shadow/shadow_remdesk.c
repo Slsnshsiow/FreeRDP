@@ -18,9 +18,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include "shadow.h"
 
@@ -28,7 +26,7 @@
 
 int shadow_client_remdesk_init(rdpShadowClient* client)
 {
-	RemdeskServerContext* remdesk;
+	RemdeskServerContext* remdesk = NULL;
 
 	remdesk = client->remdesk = remdesk_server_context_new(client->vcm);
 	remdesk->rdpcontext = &client->context;

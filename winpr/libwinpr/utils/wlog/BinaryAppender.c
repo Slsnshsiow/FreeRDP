@@ -19,9 +19,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include "BinaryAppender.h"
 #include <winpr/crt.h>
@@ -30,7 +28,7 @@
 #include <winpr/path.h>
 #include <winpr/stream.h>
 
-struct _wLogBinaryAppender
+typedef struct
 {
 	WLOG_APPENDER_COMMON();
 
@@ -38,12 +36,11 @@ struct _wLogBinaryAppender
 	char* FilePath;
 	char* FullFileName;
 	FILE* FileDescriptor;
-};
-typedef struct _wLogBinaryAppender wLogBinaryAppender;
+} wLogBinaryAppender;
 
 static BOOL WLog_BinaryAppender_Open(wLog* log, wLogAppender* appender)
 {
-	wLogBinaryAppender* binaryAppender;
+	wLogBinaryAppender* binaryAppender = NULL;
 	if (!log || !appender)
 		return FALSE;
 
@@ -53,7 +50,8 @@ static BOOL WLog_BinaryAppender_Open(wLog* log, wLogAppender* appender)
 		binaryAppender->FileName = (char*)malloc(MAX_PATH);
 		if (!binaryAppender->FileName)
 			return FALSE;
-		sprintf_s(binaryAppender->FileName, MAX_PATH, "%" PRIu32 ".wlog", GetCurrentProcessId());
+		(void)sprintf_s(binaryAppender->FileName, MAX_PATH, "%" PRIu32 ".wlog",
+		                GetCurrentProcessId());
 	}
 
 	if (!binaryAppender->FilePath)
@@ -86,9 +84,9 @@ static BOOL WLog_BinaryAppender_Open(wLog* log, wLogAppender* appender)
 	return TRUE;
 }
 
-static BOOL WLog_BinaryAppender_Close(wLog* log, wLogAppender* appender)
+static BOOL WLog_BinaryAppender_Close(WINPR_ATTR_UNUSED wLog* log, wLogAppender* appender)
 {
-	wLogBinaryAppender* binaryAppender;
+	wLogBinaryAppender* binaryAppender = NULL;
 
 	if (!appender)
 		return FALSE;
@@ -97,7 +95,8 @@ static BOOL WLog_BinaryAppender_Close(wLog* log, wLogAppender* appender)
 	if (!binaryAppender->FileDescriptor)
 		return TRUE;
 
-	fclose(binaryAppender->FileDescriptor);
+	if (binaryAppender->FileDescriptor)
+		(void)fclose(binaryAppender->FileDescriptor);
 
 	binaryAppender->FileDescriptor = NULL;
 
@@ -107,14 +106,14 @@ static BOOL WLog_BinaryAppender_Close(wLog* log, wLogAppender* appender)
 static BOOL WLog_BinaryAppender_WriteMessage(wLog* log, wLogAppender* appender,
                                              wLogMessage* message)
 {
-	FILE* fp;
-	wStream* s;
-	size_t MessageLength;
-	size_t FileNameLength;
-	size_t FunctionNameLength;
-	size_t TextStringLength;
+	FILE* fp = NULL;
+	wStream* s = NULL;
+	size_t MessageLength = 0;
+	size_t FileNameLength = 0;
+	size_t FunctionNameLength = 0;
+	size_t TextStringLength = 0;
 	BOOL ret = TRUE;
-	wLogBinaryAppender* binaryAppender;
+	wLogBinaryAppender* binaryAppender = NULL;
 
 	if (!log || !appender || !message)
 		return FALSE;
@@ -168,14 +167,16 @@ static BOOL WLog_BinaryAppender_WriteMessage(wLog* log, wLogAppender* appender,
 	return ret;
 }
 
-static BOOL WLog_BinaryAppender_WriteDataMessage(wLog* log, wLogAppender* appender,
-                                                 wLogMessage* message)
+static BOOL WLog_BinaryAppender_WriteDataMessage(WINPR_ATTR_UNUSED wLog* log,
+                                                 WINPR_ATTR_UNUSED wLogAppender* appender,
+                                                 WINPR_ATTR_UNUSED wLogMessage* message)
 {
 	return TRUE;
 }
 
-static BOOL WLog_BinaryAppender_WriteImageMessage(wLog* log, wLogAppender* appender,
-                                                  wLogMessage* message)
+static BOOL WLog_BinaryAppender_WriteImageMessage(WINPR_ATTR_UNUSED wLog* log,
+                                                  WINPR_ATTR_UNUSED wLogAppender* appender,
+                                                  WINPR_ATTR_UNUSED wLogMessage* message)
 {
 	return TRUE;
 }
@@ -208,7 +209,7 @@ static BOOL WLog_BinaryAppender_Set(wLogAppender* appender, const char* setting,
 
 static void WLog_BinaryAppender_Free(wLogAppender* appender)
 {
-	wLogBinaryAppender* binaryAppender;
+	wLogBinaryAppender* binaryAppender = NULL;
 	if (appender)
 	{
 		binaryAppender = (wLogBinaryAppender*)appender;
@@ -219,9 +220,9 @@ static void WLog_BinaryAppender_Free(wLogAppender* appender)
 	}
 }
 
-wLogAppender* WLog_BinaryAppender_New(wLog* log)
+wLogAppender* WLog_BinaryAppender_New(WINPR_ATTR_UNUSED wLog* log)
 {
-	wLogBinaryAppender* BinaryAppender;
+	wLogBinaryAppender* BinaryAppender = NULL;
 
 	BinaryAppender = (wLogBinaryAppender*)calloc(1, sizeof(wLogBinaryAppender));
 	if (!BinaryAppender)

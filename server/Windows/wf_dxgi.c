@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include "wf_interface.h"
 
@@ -109,7 +107,7 @@ int wf_dxgi_getDuplication(wfInfo* wfi)
 {
 	HRESULT status;
 	UINT dTop, i = 0;
-	DXGI_OUTPUT_DESC desc;
+	DXGI_OUTPUT_DESC desc = { 0 };
 	IDXGIOutput* pOutput;
 	IDXGIDevice* DxgiDevice = NULL;
 	IDXGIAdapter* DxgiAdapter = NULL;
@@ -134,7 +132,6 @@ int wf_dxgi_getDuplication(wfInfo* wfi)
 		return 1;
 	}
 
-	ZeroMemory(&desc, sizeof(desc));
 	pOutput = NULL;
 
 	while (DxgiAdapter->lpVtbl->EnumOutputs(DxgiAdapter, i, &pOutput) != DXGI_ERROR_NOT_FOUND)
@@ -414,7 +411,6 @@ int wf_dxgi_releasePixelData(wfInfo* wfi)
 
 int wf_dxgi_getInvalidRegion(RECT* invalid)
 {
-	UINT i;
 	HRESULT status;
 	UINT dirty;
 	UINT BufSize;
@@ -477,7 +473,7 @@ int wf_dxgi_getInvalidRegion(RECT* invalid)
 
 		pRect = (RECT*)DirtyRects;
 
-		for (i = 0; i < dirty; ++i)
+		for (UINT i = 0; i < dirty; ++i)
 		{
 			UnionRect(invalid, invalid, pRect);
 			++pRect;

@@ -19,9 +19,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,7 +29,9 @@
 #include <mmsystem.h>
 
 #include <winpr/crt.h>
+#include <winpr/wtsapi.h>
 #include <winpr/cmdline.h>
+#include <freerdp/freerdp.h>
 #include <freerdp/addin.h>
 #include <freerdp/client/audin.h>
 
@@ -39,10 +39,10 @@
 
 /* fix missing definitions in mingw */
 #ifndef WAVE_MAPPED_DEFAULT_COMMUNICATION_DEVICE
-#define  WAVE_MAPPED_DEFAULT_COMMUNICATION_DEVICE   0x0010
+#define WAVE_MAPPED_DEFAULT_COMMUNICATION_DEVICE 0x0010
 #endif
 
-typedef struct _AudinWinmmDevice
+typedef struct
 {
 	IAudinDevice iface;
 
@@ -169,15 +169,14 @@ static BOOL test_format_supported(const PWAVEFORMATEX pwfx)
 static DWORD WINAPI audin_winmm_thread_func(LPVOID arg)
 {
 	AudinWinmmDevice* winmm = (AudinWinmmDevice*)arg;
-	char* buffer;
-	int size, i;
+	char* buffer = NULL;
+	int size = 0;
 	WAVEHDR waveHdr[4] = { 0 };
-	DWORD status;
-	MMRESULT rc;
+	DWORD status = 0;
+	MMRESULT rc = 0;
 
 	if (!winmm->hWaveIn)
 	{
-		MMRESULT rc;
 		rc = waveInOpen(&winmm->hWaveIn, WAVE_MAPPER, winmm->pwfx_cur, (DWORD_PTR)waveInProc,
 		                (DWORD_PTR)winmm,
 		                CALLBACK_FUNCTION | WAVE_MAPPED_DEFAULT_COMMUNICATION_DEVICE);
@@ -190,7 +189,7 @@ static DWORD WINAPI audin_winmm_thread_func(LPVOID arg)
 	     7) /
 	    8;
 
-	for (i = 0; i < 4; i++)
+	for (int i = 0; i < 4; i++)
 	{
 		buffer = (char*)malloc(size);
 
@@ -204,7 +203,6 @@ static DWORD WINAPI audin_winmm_thread_func(LPVOID arg)
 
 		if (!log_mmresult(winmm, "waveInPrepareHeader", rc))
 		{
-
 		}
 
 		rc = waveInAddBuffer(winmm->hWaveIn, &waveHdr[i], sizeof(waveHdr[i]));
@@ -237,13 +235,12 @@ static DWORD WINAPI audin_winmm_thread_func(LPVOID arg)
 	{
 	}
 
-	for (i = 0; i < 4; i++)
+	for (int i = 0; i < 4; i++)
 	{
 		rc = waveInUnprepareHeader(winmm->hWaveIn, &waveHdr[i], sizeof(waveHdr[i]));
 
 		if (!log_mmresult(winmm, "waveInUnprepareHeader", rc))
 		{
-
 		}
 
 		free(waveHdr[i].lpData);
@@ -266,13 +263,12 @@ static DWORD WINAPI audin_winmm_thread_func(LPVOID arg)
  */
 static UINT audin_winmm_free(IAudinDevice* device)
 {
-	UINT32 i;
 	AudinWinmmDevice* winmm = (AudinWinmmDevice*)device;
 
 	if (!winmm)
 		return ERROR_INVALID_PARAMETER;
 
-	for (i = 0; i < winmm->cFormats; i++)
+	for (UINT32 i = 0; i < winmm->cFormats; i++)
 	{
 		free(winmm->ppwfx[i]);
 	}
@@ -297,7 +293,7 @@ static UINT audin_winmm_close(IAudinDevice* device)
 	if (!winmm)
 		return ERROR_INVALID_PARAMETER;
 
-	SetEvent(winmm->stopEvent);
+	(void)SetEvent(winmm->stopEvent);
 	status = WaitForSingleObject(winmm->thread, INFINITE);
 
 	if (status == WAIT_FAILED)
@@ -308,8 +304,8 @@ static UINT audin_winmm_close(IAudinDevice* device)
 		return error;
 	}
 
-	CloseHandle(winmm->thread);
-	CloseHandle(winmm->stopEvent);
+	(void)CloseHandle(winmm->thread);
+	(void)CloseHandle(winmm->stopEvent);
 	winmm->thread = NULL;
 	winmm->stopEvent = NULL;
 	winmm->receive = NULL;
@@ -325,7 +321,6 @@ static UINT audin_winmm_close(IAudinDevice* device)
 static UINT audin_winmm_set_format(IAudinDevice* device, const AUDIO_FORMAT* format,
                                    UINT32 FramesPerPacket)
 {
-	UINT32 i;
 	AudinWinmmDevice* winmm = (AudinWinmmDevice*)device;
 
 	if (!winmm || !format)
@@ -333,7 +328,7 @@ static UINT audin_winmm_set_format(IAudinDevice* device, const AUDIO_FORMAT* for
 
 	winmm->frames_per_packet = FramesPerPacket;
 
-	for (i = 0; i < winmm->cFormats; i++)
+	for (UINT32 i = 0; i < winmm->cFormats; i++)
 	{
 		const PWAVEFORMATEX ppwfx = winmm->ppwfx[i];
 		if ((ppwfx->wFormatTag == format->wFormatTag) && (ppwfx->nChannels == format->nChannels) &&
@@ -350,7 +345,9 @@ static UINT audin_winmm_set_format(IAudinDevice* device, const AUDIO_FORMAT* for
 			if (ppwfx->nBlockAlign != 2)
 			{
 				ppwfx->nBlockAlign = 2;
+				ppwfx->nAvgBytesPerSec = ppwfx->nSamplesPerSec * ppwfx->nBlockAlign;
 			}
+
 			if (!test_format_supported(ppwfx))
 				return ERROR_INVALID_PARAMETER;
 			winmm->pwfx_cur = ppwfx;
@@ -439,7 +436,7 @@ static UINT audin_winmm_open(IAudinDevice* device, AudinReceive receive, void* u
 	if (!(winmm->thread = CreateThread(NULL, 0, audin_winmm_thread_func, winmm, 0, NULL)))
 	{
 		WLog_Print(winmm->log, WLOG_ERROR, "CreateThread failed!");
-		CloseHandle(winmm->stopEvent);
+		(void)CloseHandle(winmm->stopEvent);
 		winmm->stopEvent = NULL;
 		return ERROR_INTERNAL_ERROR;
 	}
@@ -452,11 +449,11 @@ static UINT audin_winmm_open(IAudinDevice* device, AudinReceive receive, void* u
  *
  * @return 0 on success, otherwise a Win32 error code
  */
-static UINT audin_winmm_parse_addin_args(AudinWinmmDevice* device, ADDIN_ARGV* args)
+static UINT audin_winmm_parse_addin_args(AudinWinmmDevice* device, const ADDIN_ARGV* args)
 {
 	int status;
 	DWORD flags;
-	COMMAND_LINE_ARGUMENT_A* arg;
+	const COMMAND_LINE_ARGUMENT_A* arg;
 	AudinWinmmDevice* winmm = (AudinWinmmDevice*)device;
 	COMMAND_LINE_ARGUMENT_A audin_winmm_args[] = { { "dev", COMMAND_LINE_VALUE_REQUIRED, "<device>",
 		                                             NULL, NULL, -1, NULL, "audio device name" },
@@ -489,20 +486,15 @@ static UINT audin_winmm_parse_addin_args(AudinWinmmDevice* device, ADDIN_ARGV* a
 	return CHANNEL_RC_OK;
 }
 
-#ifdef BUILTIN_CHANNELS
-#define freerdp_audin_client_subsystem_entry winmm_freerdp_audin_client_subsystem_entry
-#else
-#define freerdp_audin_client_subsystem_entry FREERDP_API freerdp_audin_client_subsystem_entry
-#endif
-
 /**
  * Function description
  *
  * @return 0 on success, otherwise a Win32 error code
  */
-UINT freerdp_audin_client_subsystem_entry(PFREERDP_AUDIN_DEVICE_ENTRY_POINTS pEntryPoints)
+FREERDP_ENTRY_POINT(UINT VCAPITYPE winmm_freerdp_audin_client_subsystem_entry(
+    PFREERDP_AUDIN_DEVICE_ENTRY_POINTS pEntryPoints))
 {
-	ADDIN_ARGV* args;
+	const ADDIN_ARGV* args;
 	AudinWinmmDevice* winmm;
 	UINT error;
 
