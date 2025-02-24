@@ -17,18 +17,16 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include <stdio.h>
 
 #include <winpr/crt.h>
 
 #include <freerdp/log.h>
-#include <freerdp/cache/palette.h>
 
 #include "palette.h"
+#include "cache.h"
 
 #define TAG FREERDP_TAG("cache.palette")
 
@@ -39,7 +37,7 @@ static void palette_cache_put(rdpPaletteCache* palette, UINT32 index, void* entr
 static BOOL update_gdi_cache_color_table(rdpContext* context,
                                          const CACHE_COLOR_TABLE_ORDER* cacheColorTable)
 {
-	UINT32* colorTable;
+	UINT32* colorTable = NULL;
 	rdpCache* cache = context->cache;
 	colorTable = (UINT32*)malloc(sizeof(UINT32) * 256);
 
@@ -53,7 +51,7 @@ static BOOL update_gdi_cache_color_table(rdpContext* context,
 
 void* palette_cache_get(rdpPaletteCache* paletteCache, UINT32 index)
 {
-	void* entry;
+	void* entry = NULL;
 
 	if (index >= paletteCache->maxEntries)
 	{
@@ -92,7 +90,7 @@ void palette_cache_register_callbacks(rdpUpdate* update)
 
 rdpPaletteCache* palette_cache_new(rdpContext* context)
 {
-	rdpPaletteCache* paletteCache;
+	rdpPaletteCache* paletteCache = NULL;
 
 	WINPR_ASSERT(context);
 
@@ -113,9 +111,7 @@ void palette_cache_free(rdpPaletteCache* paletteCache)
 {
 	if (paletteCache)
 	{
-		UINT32 i;
-
-		for (i = 0; i < paletteCache->maxEntries; i++)
+		for (UINT32 i = 0; i < paletteCache->maxEntries; i++)
 			free(paletteCache->entries[i].entry);
 
 		free(paletteCache->entries);
@@ -123,7 +119,7 @@ void palette_cache_free(rdpPaletteCache* paletteCache)
 	}
 }
 
-void free_palette_update(rdpContext* context, PALETTE_UPDATE* pointer)
+void free_palette_update(WINPR_ATTR_UNUSED rdpContext* context, PALETTE_UPDATE* pointer)
 {
 	free(pointer);
 }
@@ -138,6 +134,9 @@ PALETTE_UPDATE* copy_palette_update(rdpContext* context, const PALETTE_UPDATE* p
 	*dst = *pointer;
 	return dst;
 fail:
+	WINPR_PRAGMA_DIAG_PUSH
+	WINPR_PRAGMA_DIAG_IGNORED_MISMATCHED_DEALLOC
 	free_palette_update(context, dst);
+	WINPR_PRAGMA_DIAG_POP
 	return NULL;
 }

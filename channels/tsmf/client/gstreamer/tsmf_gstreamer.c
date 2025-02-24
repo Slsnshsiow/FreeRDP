@@ -19,9 +19,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include <winpr/assert.h>
 
@@ -32,15 +30,9 @@
 #include <unistd.h>
 
 #include <winpr/string.h>
+#include <winpr/platform.h>
 
-#if __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wparentheses-equality"
-#endif /* __clang__ */
 #include <gst/gst.h>
-#if __clang__
-#pragma clang diagnostic pop
-#endif /* __clang__ */
 
 #include <gst/app/gstappsrc.h>
 #include <gst/app/gstappsink.h>
@@ -48,10 +40,6 @@
 #include "tsmf_constants.h"
 #include "tsmf_decoder.h"
 #include "tsmf_platform.h"
-
-#ifdef HAVE_INTTYPES_H
-#include <inttypes.h>
-#endif
 
 /* 1 second = 10,000,000 100ns units*/
 #define SEEK_TOLERANCE 10 * 1000 * 1000
@@ -420,6 +408,8 @@ static BOOL tsmf_gstreamer_set_format(ITSMFDecoder* decoder, TS_AM_MEDIA_TYPE* m
 			   http://msdn.microsoft.com/en-us/library/dd757806.aspx */
 			if (media_type->ExtraData)
 			{
+				if (media_type->ExtraDataSize < 12)
+					return FALSE;
 				media_type->ExtraData += 12;
 				media_type->ExtraDataSize -= 12;
 			}
@@ -776,8 +766,8 @@ static BOOL tsmf_gstreamer_decodeEx(ITSMFDecoder* decoder, const BYTE* data, UIN
 
 			mdecoder->seeking = TRUE;
 
-			/* since we cant make the gstreamer pipeline jump to the new start time after a seek -
-			 * we just maintain a offset between realtime and gstreamer time
+			/* since we can't make the gstreamer pipeline jump to the new start time after a seek -
+			 * we just maintain an offset between realtime and gstreamer time
 			 */
 			mdecoder->seek_offset = start_time;
 		}
@@ -1013,15 +1003,11 @@ static BOOL tsmf_gstreamer_sync(ITSMFDecoder* decoder, void (*cb)(void*), void* 
 	return TRUE;
 }
 
-#ifdef BUILTIN_CHANNELS
-#define freerdp_tsmf_client_subsystem_entry gstreamer_freerdp_tsmf_client_decoder_subsystem_entry
-#else
-#define freerdp_tsmf_client_subsystem_entry FREERDP_API freerdp_tsmf_client_decoder_subsystem_entry
-#endif
-
-ITSMFDecoder* freerdp_tsmf_client_subsystem_entry(void)
+FREERDP_ENTRY_POINT(UINT VCAPITYPE gstreamer_freerdp_tsmf_client_decoder_subsystem_entry(void* ptr))
 {
-	TSMFGstreamerDecoder* decoder;
+	ITSMFDecoder** sptr = (ITSMFDecoder**)ptr;
+	WINPR_ASSERT(sptr);
+	*sptr = NULL;
 
 #if GST_CHECK_VERSION(0, 10, 31)
 	if (!gst_is_initialized())
@@ -1032,10 +1018,11 @@ ITSMFDecoder* freerdp_tsmf_client_subsystem_entry(void)
 	gst_init(NULL, NULL);
 #endif
 
+	TSMFGstreamerDecoder* decoder;
 	decoder = calloc(1, sizeof(TSMFGstreamerDecoder));
 
 	if (!decoder)
-		return NULL;
+		return ERROR_OUTOFMEMORY;
 
 	decoder->iface.SetFormat = tsmf_gstreamer_set_format;
 	decoder->iface.Decode = NULL;
@@ -1063,8 +1050,9 @@ ITSMFDecoder* freerdp_tsmf_client_subsystem_entry(void)
 	if (tsmf_platform_create(decoder) < 0)
 	{
 		free(decoder);
-		return NULL;
+		return ERROR_INTERNAL_ERROR;
 	}
 
-	return (ITSMFDecoder*)decoder;
+	*sptr = &decoder->iface;
+	return CHANNEL_RC_OK;
 }

@@ -24,11 +24,7 @@
 #include <winpr/stream.h>
 #include <freerdp/api.h>
 
-typedef struct _MSUSB_INTERFACE_DESCRIPTOR MSUSB_INTERFACE_DESCRIPTOR;
-typedef struct _MSUSB_PIPE_DESCRIPTOR MSUSB_PIPE_DESCRIPTOR;
-typedef struct _MSUSB_CONFIG_DESCRIPTOR MSUSB_CONFIG_DESCRIPTOR;
-
-struct _MSUSB_PIPE_DESCRIPTOR
+typedef struct
 {
 	UINT16 MaximumPacketSize;
 	UINT32 MaximumTransferSize;
@@ -38,9 +34,9 @@ struct _MSUSB_PIPE_DESCRIPTOR
 	BYTE bInterval;
 	BYTE PipeType;
 	int InitCompleted;
-};
+} MSUSB_PIPE_DESCRIPTOR;
 
-struct _MSUSB_INTERFACE_DESCRIPTOR
+typedef struct
 {
 	UINT16 Length;
 	UINT16 NumberOfPipesExpected;
@@ -53,9 +49,9 @@ struct _MSUSB_INTERFACE_DESCRIPTOR
 	BYTE bInterfaceProtocol;
 	MSUSB_PIPE_DESCRIPTOR** MsPipes;
 	int InitCompleted;
-};
+} MSUSB_INTERFACE_DESCRIPTOR;
 
-struct _MSUSB_CONFIG_DESCRIPTOR
+typedef struct
 {
 	UINT16 wTotalLength;
 	BYTE bConfigurationValue;
@@ -64,7 +60,7 @@ struct _MSUSB_CONFIG_DESCRIPTOR
 	MSUSB_INTERFACE_DESCRIPTOR** MsInterfaces;
 	int InitCompleted;
 	int MsOutSize;
-};
+} MSUSB_CONFIG_DESCRIPTOR;
 
 #ifdef __cplusplus
 extern "C"
@@ -85,8 +81,12 @@ extern "C"
 	FREERDP_API void msusb_msinterface_free(MSUSB_INTERFACE_DESCRIPTOR* MsInterface);
 
 	/* MSUSB_CONFIG exported functions */
-	FREERDP_API MSUSB_CONFIG_DESCRIPTOR* msusb_msconfig_new(void);
 	FREERDP_API void msusb_msconfig_free(MSUSB_CONFIG_DESCRIPTOR* MsConfig);
+
+	WINPR_ATTR_MALLOC(msusb_msconfig_free, 1)
+	FREERDP_API MSUSB_CONFIG_DESCRIPTOR* msusb_msconfig_new(void);
+
+	WINPR_ATTR_MALLOC(msusb_msconfig_free, 1)
 	FREERDP_API MSUSB_CONFIG_DESCRIPTOR* msusb_msconfig_read(wStream* s, UINT32 NumInterfaces);
 	FREERDP_API BOOL msusb_msconfig_write(MSUSB_CONFIG_DESCRIPTOR* MsConfg, wStream* out);
 	FREERDP_API void msusb_msconfig_dump(MSUSB_CONFIG_DESCRIPTOR* MsConfg);
