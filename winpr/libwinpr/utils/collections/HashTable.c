@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/crt.h>
 #include <winpr/assert.h>
@@ -34,9 +32,9 @@
  * http://www.pomakis.com/hashtable/hashtable.h
  */
 
-typedef struct _wKeyValuePair wKeyValuePair;
+typedef struct s_wKeyValuePair wKeyValuePair;
 
-struct _wKeyValuePair
+struct s_wKeyValuePair
 {
 	void* key;
 	void* value;
@@ -45,7 +43,7 @@ struct _wKeyValuePair
 	BOOL markedForRemove;
 };
 
-struct _wHashTable
+struct s_wHashTable
 {
 	BOOL synchronized;
 	CRITICAL_SECTION lock;
@@ -85,7 +83,7 @@ BOOL HashTable_StringCompare(const void* string1, const void* string2)
 
 UINT32 HashTable_StringHash(const void* key)
 {
-	UINT32 c;
+	UINT32 c = 0;
 	UINT32 hash = 5381;
 	const BYTE* str = (const BYTE*)key;
 
@@ -98,19 +96,17 @@ UINT32 HashTable_StringHash(const void* key)
 
 void* HashTable_StringClone(const void* str)
 {
-	return _strdup((const char*)str);
+	return winpr_ObjectStringClone(str);
 }
 
 void HashTable_StringFree(void* str)
 {
-	free(str);
+	winpr_ObjectStringFree(str);
 }
 
 static INLINE BOOL HashTable_IsProbablePrime(size_t oddNumber)
 {
-	size_t i;
-
-	for (i = 3; i < 51; i += 2)
+	for (size_t i = 3; i < 51; i += 2)
 	{
 		if (oddNumber == i)
 			return TRUE;
@@ -123,10 +119,11 @@ static INLINE BOOL HashTable_IsProbablePrime(size_t oddNumber)
 
 static INLINE size_t HashTable_CalculateIdealNumOfBuckets(wHashTable* table)
 {
-	size_t idealNumOfBuckets;
-
 	WINPR_ASSERT(table);
-	idealNumOfBuckets = table->numOfElements / (table->idealRatio);
+
+	const float numOfElements = (float)table->numOfElements;
+	const float tmp = (numOfElements / table->idealRatio);
+	size_t idealNumOfBuckets = (size_t)tmp;
 
 	if (idealNumOfBuckets < 5)
 		idealNumOfBuckets = 5;
@@ -141,11 +138,9 @@ static INLINE size_t HashTable_CalculateIdealNumOfBuckets(wHashTable* table)
 
 static INLINE void HashTable_Rehash(wHashTable* table, size_t numOfBuckets)
 {
-	size_t index;
-	UINT32 hashValue;
-	wKeyValuePair* pair;
-	wKeyValuePair* nextPair;
-	wKeyValuePair** newBucketArray;
+	UINT32 hashValue = 0;
+	wKeyValuePair* nextPair = NULL;
+	wKeyValuePair** newBucketArray = NULL;
 
 	WINPR_ASSERT(table);
 	if (numOfBuckets == 0)
@@ -165,9 +160,9 @@ static INLINE void HashTable_Rehash(wHashTable* table, size_t numOfBuckets)
 		return;
 	}
 
-	for (index = 0; index < table->numOfBuckets; index++)
+	for (size_t index = 0; index < table->numOfBuckets; index++)
 	{
-		pair = table->bucketArray[index];
+		wKeyValuePair* pair = table->bucketArray[index];
 
 		while (pair)
 		{
@@ -179,7 +174,7 @@ static INLINE void HashTable_Rehash(wHashTable* table, size_t numOfBuckets)
 		}
 	}
 
-	free(table->bucketArray);
+	free((void*)table->bucketArray);
 	table->bucketArray = newBucketArray;
 	table->numOfBuckets = numOfBuckets;
 }
@@ -194,8 +189,8 @@ static INLINE BOOL HashTable_Equals(wHashTable* table, const wKeyValuePair* pair
 
 static INLINE wKeyValuePair* HashTable_Get(wHashTable* table, const void* key)
 {
-	UINT32 hashValue;
-	wKeyValuePair* pair;
+	UINT32 hashValue = 0;
+	wKeyValuePair* pair = NULL;
 
 	WINPR_ASSERT(table);
 	if (!key)
@@ -243,7 +238,15 @@ static INLINE void setKey(wHashTable* table, wKeyValuePair* pair, const void* ke
 	if (table->key.fnObjectNew)
 		pair->key = table->key.fnObjectNew(key);
 	else
-		pair->key = (void*)key;
+	{
+		union
+		{
+			const void* cpv;
+			void* pv;
+		} cnv;
+		cnv.cpv = key;
+		pair->key = cnv.pv;
+	}
 }
 
 static INLINE void setValue(wHashTable* table, wKeyValuePair* pair, const void* value)
@@ -255,7 +258,15 @@ static INLINE void setValue(wHashTable* table, wKeyValuePair* pair, const void* 
 	if (table->value.fnObjectNew)
 		pair->value = table->value.fnObjectNew(value);
 	else
-		pair->value = (void*)value;
+	{
+		union
+		{
+			const void* cpv;
+			void* pv;
+		} cnv;
+		cnv.cpv = value;
+		pair->value = cnv.pv;
+	}
 }
 
 /**
@@ -296,9 +307,9 @@ int HashTable_Add(wHashTable* table, const void* key, const void* value)
 BOOL HashTable_Insert(wHashTable* table, const void* key, const void* value)
 {
 	BOOL rc = FALSE;
-	UINT32 hashValue;
-	wKeyValuePair* pair;
-	wKeyValuePair* newPair;
+	UINT32 hashValue = 0;
+	wKeyValuePair* pair = NULL;
+	wKeyValuePair* newPair = NULL;
 
 	WINPR_ASSERT(table);
 	if (!key || !value)
@@ -371,7 +382,7 @@ BOOL HashTable_Insert(wHashTable* table, const void* key, const void* value)
 
 BOOL HashTable_Remove(wHashTable* table, const void* key)
 {
-	UINT32 hashValue;
+	UINT32 hashValue = 0;
 	BOOL status = TRUE;
 	wKeyValuePair* pair = NULL;
 	wKeyValuePair* previousPair = NULL;
@@ -415,7 +426,7 @@ BOOL HashTable_Remove(wHashTable* table, const void* key)
 	disposePair(table, pair);
 	table->numOfElements--;
 
-	if (!table->foreachRecursionLevel && table->lowerRehashThreshold > 0.0)
+	if (!table->foreachRecursionLevel && table->lowerRehashThreshold > 0.0f)
 	{
 		float elementToBucketRatio = (float)table->numOfElements / (float)table->numOfBuckets;
 
@@ -437,7 +448,7 @@ out:
 void* HashTable_GetItemValue(wHashTable* table, const void* key)
 {
 	void* value = NULL;
-	wKeyValuePair* pair;
+	wKeyValuePair* pair = NULL;
 
 	WINPR_ASSERT(table);
 	if (!key)
@@ -464,7 +475,7 @@ void* HashTable_GetItemValue(wHashTable* table, const void* key)
 BOOL HashTable_SetItemValue(wHashTable* table, const void* key, const void* value)
 {
 	BOOL status = TRUE;
-	wKeyValuePair* pair;
+	wKeyValuePair* pair = NULL;
 
 	WINPR_ASSERT(table);
 	if (!key)
@@ -494,18 +505,16 @@ BOOL HashTable_SetItemValue(wHashTable* table, const void* key, const void* valu
 
 void HashTable_Clear(wHashTable* table)
 {
-	size_t index;
-	wKeyValuePair* pair;
-	wKeyValuePair* nextPair;
+	wKeyValuePair* nextPair = NULL;
 
 	WINPR_ASSERT(table);
 
 	if (table->synchronized)
 		EnterCriticalSection(&table->lock);
 
-	for (index = 0; index < table->numOfBuckets; index++)
+	for (size_t index = 0; index < table->numOfBuckets; index++)
 	{
-		pair = table->bucketArray[index];
+		wKeyValuePair* pair = table->bucketArray[index];
 
 		while (pair)
 		{
@@ -541,12 +550,10 @@ void HashTable_Clear(wHashTable* table)
 
 size_t HashTable_GetKeys(wHashTable* table, ULONG_PTR** ppKeys)
 {
-	size_t iKey;
-	size_t count;
-	size_t index;
-	ULONG_PTR* pKeys;
-	wKeyValuePair* pair;
-	wKeyValuePair* nextPair;
+	size_t iKey = 0;
+	size_t count = 0;
+	ULONG_PTR* pKeys = NULL;
+	wKeyValuePair* nextPair = NULL;
 
 	WINPR_ASSERT(table);
 
@@ -555,7 +562,8 @@ size_t HashTable_GetKeys(wHashTable* table, ULONG_PTR** ppKeys)
 
 	iKey = 0;
 	count = table->numOfElements;
-	*ppKeys = NULL;
+	if (ppKeys)
+		*ppKeys = NULL;
 
 	if (count < 1)
 	{
@@ -575,9 +583,9 @@ size_t HashTable_GetKeys(wHashTable* table, ULONG_PTR** ppKeys)
 		return 0;
 	}
 
-	for (index = 0; index < table->numOfBuckets; index++)
+	for (size_t index = 0; index < table->numOfBuckets; index++)
 	{
-		pair = table->bucketArray[index];
+		wKeyValuePair* pair = table->bucketArray[index];
 
 		while (pair)
 		{
@@ -601,8 +609,6 @@ size_t HashTable_GetKeys(wHashTable* table, ULONG_PTR** ppKeys)
 BOOL HashTable_Foreach(wHashTable* table, HASH_TABLE_FOREACH_FN fn, VOID* arg)
 {
 	BOOL ret = TRUE;
-	size_t index;
-	wKeyValuePair* pair;
 
 	WINPR_ASSERT(table);
 	WINPR_ASSERT(fn);
@@ -611,9 +617,9 @@ BOOL HashTable_Foreach(wHashTable* table, HASH_TABLE_FOREACH_FN fn, VOID* arg)
 		EnterCriticalSection(&table->lock);
 
 	table->foreachRecursionLevel++;
-	for (index = 0; index < table->numOfBuckets; index++)
+	for (size_t index = 0; index < table->numOfBuckets; index++)
 	{
-		for (pair = table->bucketArray[index]; pair; pair = pair->next)
+		for (wKeyValuePair* pair = table->bucketArray[index]; pair; pair = pair->next)
 		{
 			if (!pair->markedForRemove && !fn(pair->key, pair->value, arg))
 			{
@@ -627,12 +633,12 @@ BOOL HashTable_Foreach(wHashTable* table, HASH_TABLE_FOREACH_FN fn, VOID* arg)
 	if (!table->foreachRecursionLevel && table->pendingRemoves)
 	{
 		/* if we're the last recursive foreach call, let's do the cleanup if needed */
-		wKeyValuePair** prevPtr;
-		for (index = 0; index < table->numOfBuckets; index++)
+		wKeyValuePair** prevPtr = NULL;
+		for (size_t index = 0; index < table->numOfBuckets; index++)
 		{
-			wKeyValuePair* nextPair;
+			wKeyValuePair* nextPair = NULL;
 			prevPtr = &table->bucketArray[index];
-			for (pair = table->bucketArray[index]; pair;)
+			for (wKeyValuePair* pair = table->bucketArray[index]; pair;)
 			{
 				nextPair = pair->next;
 
@@ -663,8 +669,8 @@ out:
 
 BOOL HashTable_Contains(wHashTable* table, const void* key)
 {
-	BOOL status;
-	wKeyValuePair* pair;
+	BOOL status = 0;
+	wKeyValuePair* pair = NULL;
 
 	WINPR_ASSERT(table);
 	if (!key)
@@ -688,8 +694,8 @@ BOOL HashTable_Contains(wHashTable* table, const void* key)
 
 BOOL HashTable_ContainsKey(wHashTable* table, const void* key)
 {
-	BOOL status;
-	wKeyValuePair* pair;
+	BOOL status = 0;
+	wKeyValuePair* pair = NULL;
 
 	WINPR_ASSERT(table);
 	if (!key)
@@ -713,9 +719,7 @@ BOOL HashTable_ContainsKey(wHashTable* table, const void* key)
 
 BOOL HashTable_ContainsValue(wHashTable* table, const void* value)
 {
-	size_t index;
 	BOOL status = FALSE;
-	wKeyValuePair* pair;
 
 	WINPR_ASSERT(table);
 	if (!value)
@@ -724,9 +728,9 @@ BOOL HashTable_ContainsValue(wHashTable* table, const void* value)
 	if (table->synchronized)
 		EnterCriticalSection(&table->lock);
 
-	for (index = 0; index < table->numOfBuckets; index++)
+	for (size_t index = 0; index < table->numOfBuckets; index++)
 	{
-		pair = table->bucketArray[index];
+		wKeyValuePair* pair = table->bucketArray[index];
 
 		while (pair)
 		{
@@ -769,31 +773,33 @@ wHashTable* HashTable_New(BOOL synchronized)
 	if (!table->bucketArray)
 		goto fail;
 
-	table->idealRatio = 3.0;
-	table->lowerRehashThreshold = 0.0;
-	table->upperRehashThreshold = 15.0;
+	table->idealRatio = 3.0f;
+	table->lowerRehashThreshold = 0.0f;
+	table->upperRehashThreshold = 15.0f;
 	table->hash = HashTable_PointerHash;
 	table->key.fnObjectEquals = HashTable_PointerCompare;
 	table->value.fnObjectEquals = HashTable_PointerCompare;
 
 	return table;
 fail:
+	WINPR_PRAGMA_DIAG_PUSH
+	WINPR_PRAGMA_DIAG_IGNORED_MISMATCHED_DEALLOC
 	HashTable_Free(table);
+	WINPR_PRAGMA_DIAG_POP
 	return NULL;
 }
 
 void HashTable_Free(wHashTable* table)
 {
-	size_t index;
-	wKeyValuePair* pair;
-	wKeyValuePair* nextPair;
+	wKeyValuePair* pair = NULL;
+	wKeyValuePair* nextPair = NULL;
 
 	if (!table)
 		return;
 
 	if (table->bucketArray)
 	{
-		for (index = 0; index < table->numOfBuckets; index++)
+		for (size_t index = 0; index < table->numOfBuckets; index++)
 		{
 			pair = table->bucketArray[index];
 
@@ -805,11 +811,23 @@ void HashTable_Free(wHashTable* table)
 				pair = nextPair;
 			}
 		}
-		free(table->bucketArray);
+		free((void*)table->bucketArray);
 	}
 	DeleteCriticalSection(&(table->lock));
 
 	free(table);
+}
+
+void HashTable_Lock(wHashTable* table)
+{
+	WINPR_ASSERT(table);
+	EnterCriticalSection(&table->lock);
+}
+
+void HashTable_Unlock(wHashTable* table)
+{
+	WINPR_ASSERT(table);
+	LeaveCriticalSection(&table->lock);
 }
 
 wObject* HashTable_KeyObject(wHashTable* table)
@@ -833,7 +851,7 @@ BOOL HashTable_SetHashFunction(wHashTable* table, HASH_TABLE_HASH_FN fn)
 
 BOOL HashTable_SetupForStringData(wHashTable* table, BOOL stringValues)
 {
-	wObject* obj;
+	wObject* obj = NULL;
 
 	if (!HashTable_SetHashFunction(table, HashTable_StringHash))
 		return FALSE;

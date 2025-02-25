@@ -27,6 +27,7 @@
 #include <winpr/nt.h>
 #include <winpr/io.h>
 #include <winpr/error.h>
+#include <winpr/handle.h>
 
 #ifndef _WIN32
 
@@ -182,12 +183,13 @@
 #define MOVEFILE_CREATE_HARDLINK 0x10
 #define MOVEFILE_FAIL_IF_NOT_TRACKABLE 0x20
 
-typedef union _FILE_SEGMENT_ELEMENT {
+typedef union
+{
 	PVOID64 Buffer;
 	ULONGLONG Alignment;
 } FILE_SEGMENT_ELEMENT, *PFILE_SEGMENT_ELEMENT;
 
-typedef struct _WIN32_FIND_DATAA
+typedef struct
 {
 	DWORD dwFileAttributes;
 	FILETIME ftCreationTime;
@@ -201,7 +203,7 @@ typedef struct _WIN32_FIND_DATAA
 	CHAR cAlternateFileName[14];
 } WIN32_FIND_DATAA, *PWIN32_FIND_DATAA, *LPWIN32_FIND_DATAA;
 
-typedef struct _WIN32_FIND_DATAW
+typedef struct
 {
 	DWORD dwFileAttributes;
 	FILETIME ftCreationTime;
@@ -215,13 +217,27 @@ typedef struct _WIN32_FIND_DATAW
 	WCHAR cAlternateFileName[14];
 } WIN32_FIND_DATAW, *PWIN32_FIND_DATAW, *LPWIN32_FIND_DATAW;
 
-typedef enum _FINDEX_INFO_LEVELS
+typedef struct
+{
+	DWORD dwFileAttributes;
+	FILETIME ftCreationTime;
+	FILETIME ftLastAccessTime;
+	FILETIME ftLastWriteTime;
+	DWORD dwVolumeSerialNumber;
+	DWORD nFileSizeHigh;
+	DWORD nFileSizeLow;
+	DWORD nNumberOfLinks;
+	DWORD nFileIndexHigh;
+	DWORD nFileIndexLow;
+} BY_HANDLE_FILE_INFORMATION, *PBY_HANDLE_FILE_INFORMATION, *LPBY_HANDLE_FILE_INFORMATION;
+
+typedef enum
 {
 	FindExInfoStandard,
 	FindExInfoMaxInfoLevel
 } FINDEX_INFO_LEVELS;
 
-typedef enum _FINDEX_SEARCH_OPS
+typedef enum
 {
 	FindExSearchNameMatch,
 	FindExSearchLimitToDirectories,
@@ -247,11 +263,13 @@ extern "C"
 {
 #endif
 
+	WINPR_ATTR_MALLOC(CloseHandle, 1)
 	WINPR_API HANDLE CreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
 	                             LPSECURITY_ATTRIBUTES lpSecurityAttributes,
 	                             DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes,
 	                             HANDLE hTemplateFile);
 
+	WINPR_ATTR_MALLOC(CloseHandle, 1)
 	WINPR_API HANDLE CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
 	                             LPSECURITY_ATTRIBUTES lpSecurityAttributes,
 	                             DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes,
@@ -285,7 +303,7 @@ extern "C"
 
 	WINPR_API BOOL FlushFileBuffers(HANDLE hFile);
 
-	typedef struct _WIN32_FILE_ATTRIBUTE_DATA
+	typedef struct
 	{
 		DWORD dwFileAttributes;
 		FILETIME ftCreationTime;
@@ -295,7 +313,7 @@ extern "C"
 		DWORD nFileSizeLow;
 	} WIN32_FILE_ATTRIBUTE_DATA, *LPWIN32_FILE_ATTRIBUTE_DATA;
 
-	typedef enum _GET_FILEEX_INFO_LEVELS
+	typedef enum
 	{
 		GetFileExInfoStandard,
 		GetFileExMaxInfoLevel
@@ -310,6 +328,9 @@ extern "C"
 	                                    LPVOID lpFileInformation);
 
 	WINPR_API DWORD GetFileAttributesW(LPCWSTR lpFileName);
+
+	WINPR_API BOOL GetFileInformationByHandle(HANDLE hFile,
+	                                          LPBY_HANDLE_FILE_INFORMATION lpFileInformation);
 
 	WINPR_API BOOL SetFileAttributesA(LPCSTR lpFileName, DWORD dwFileAttributes);
 
@@ -341,20 +362,26 @@ extern "C"
 	WINPR_API BOOL SetFileTime(HANDLE hFile, const FILETIME* lpCreationTime,
 	                           const FILETIME* lpLastAccessTime, const FILETIME* lpLastWriteTime);
 
+	WINPR_API BOOL FindClose(HANDLE hFindFile);
+
+	WINPR_ATTR_MALLOC(FindClose, 1)
 	WINPR_API HANDLE FindFirstFileA(LPCSTR lpFileName, LPWIN32_FIND_DATAA lpFindFileData);
+
+	WINPR_ATTR_MALLOC(FindClose, 1)
 	WINPR_API HANDLE FindFirstFileW(LPCWSTR lpFileName, LPWIN32_FIND_DATAW lpFindFileData);
 
+	WINPR_ATTR_MALLOC(FindClose, 1)
 	WINPR_API HANDLE FindFirstFileExA(LPCSTR lpFileName, FINDEX_INFO_LEVELS fInfoLevelId,
 	                                  LPVOID lpFindFileData, FINDEX_SEARCH_OPS fSearchOp,
 	                                  LPVOID lpSearchFilter, DWORD dwAdditionalFlags);
+
+	WINPR_ATTR_MALLOC(FindClose, 1)
 	WINPR_API HANDLE FindFirstFileExW(LPCWSTR lpFileName, FINDEX_INFO_LEVELS fInfoLevelId,
 	                                  LPVOID lpFindFileData, FINDEX_SEARCH_OPS fSearchOp,
 	                                  LPVOID lpSearchFilter, DWORD dwAdditionalFlags);
 
 	WINPR_API BOOL FindNextFileA(HANDLE hFindFile, LPWIN32_FIND_DATAA lpFindFileData);
 	WINPR_API BOOL FindNextFileW(HANDLE hFindFile, LPWIN32_FIND_DATAW lpFindFileData);
-
-	WINPR_API BOOL FindClose(HANDLE hFindFile);
 
 	WINPR_API BOOL CreateDirectoryA(LPCSTR lpPathName, LPSECURITY_ATTRIBUTES lpSecurityAttributes);
 	WINPR_API BOOL CreateDirectoryW(LPCWSTR lpPathName, LPSECURITY_ATTRIBUTES lpSecurityAttributes);
@@ -424,15 +451,15 @@ typedef HANDLE (*pcCreateFileA)(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD 
                                 DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes,
                                 HANDLE hTemplateFile);
 
-typedef struct _HANDLE_CREATOR
+typedef struct
 {
 	pcIsFileHandled IsHandled;
 	pcCreateFileA CreateFileA;
 } HANDLE_CREATOR, *PHANDLE_CREATOR, *LPHANDLE_CREATOR;
 
-WINPR_API BOOL ValidFileNameComponent(LPCWSTR lpFileName);
-
 #endif /* _WIN32 */
+
+WINPR_API BOOL ValidFileNameComponent(LPCWSTR lpFileName);
 
 #ifdef _UWP
 
@@ -523,6 +550,7 @@ extern "C"
 	WINPR_API int GetNamePipeFileDescriptor(HANDLE hNamedPipe);
 	WINPR_API HANDLE GetFileHandleForFileDescriptor(int fd);
 
+	WINPR_ATTR_MALLOC(fclose, 1)
 	WINPR_API FILE* winpr_fopen(const char* path, const char* mode);
 
 #ifdef __cplusplus

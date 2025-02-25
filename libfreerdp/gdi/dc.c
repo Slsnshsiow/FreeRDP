@@ -1,4 +1,4 @@
-/**
+/*
  * FreeRDP: A Remote Desktop Protocol Implementation
  * GDI Device Context Functions
  *
@@ -21,9 +21,7 @@
 
 /* Device Context Functions: http://msdn.microsoft.com/en-us/library/dd183554 */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,8 +34,9 @@
 #include <freerdp/gdi/dc.h>
 
 /**
- * Get the current device context (a new one is created each time).\n
- * @msdn{dd144871}
+ * @brief Get the current device context (a new one is created each time).
+ * msdn{dd144871}
+ *
  * @return current device context
  */
 
@@ -64,14 +63,15 @@ HGDI_DC gdi_GetDC(void)
 }
 
 /**
- * Create a device context.\n
- * @msdn{dd144871}
+ * @brief Create a device context.
+ * msdn{dd144871}
+ *
  * @return new device context
  */
 
 HGDI_DC gdi_CreateDC(UINT32 format)
 {
-	HGDI_DC hDC;
+	HGDI_DC hDC = NULL;
 
 	if (!(hDC = (HGDI_DC)calloc(1, sizeof(GDI_DC))))
 		return NULL;
@@ -105,8 +105,8 @@ fail:
 }
 
 /**
- * Create a new device context compatible with the given device context.\n
- * @msdn{dd183489}
+ * @brief Create a new device context compatible with the given device context.
+ * msdn{dd183489}
  * @param hdc device context
  * @return new compatible device context
  */
@@ -132,8 +132,9 @@ HGDI_DC gdi_CreateCompatibleDC(HGDI_DC hdc)
 }
 
 /**
- * Select a GDI object in the current device context.\n
- * @msdn{dd162957}
+ * @brief Select a GDI object in the current device context.
+ * msdn{dd162957}
+ *
  * @param hdc device context
  * @param hgdiobject new selected GDI object
  * @return previous selected GDI object
@@ -180,8 +181,8 @@ HGDIOBJECT gdi_SelectObject(HGDI_DC hdc, HGDIOBJECT hgdiobject)
 }
 
 /**
- * Delete a GDI object.\n
- * @msdn{dd183539}
+ * @brief Delete a GDI object.
+ * msdn{dd183539}
  * @param hgdiobject GDI object
  * @return nonzero if successful, 0 otherwise
  */
@@ -232,8 +233,8 @@ BOOL gdi_DeleteObject(HGDIOBJECT hgdiobject)
 }
 
 /**
- * Delete device context.\n
- * @msdn{dd183533}
+ * @brief Delete device context.
+ * msdn{dd183533}
  * @param hdc device context
  * @return nonzero if successful, 0 otherwise
  */

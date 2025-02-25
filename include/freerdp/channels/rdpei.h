@@ -24,8 +24,18 @@
 
 #include <winpr/wtypes.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #define RDPINPUT_HEADER_LENGTH 6
 
+/** The command line name of the channel
+ *
+ *  \since version 3.0.0
+ */
+#define RDPEI_CHANNEL_NAME "rdpei"
 #define RDPEI_DVC_CHANNEL_NAME "Microsoft::Windows::RDS::Input"
 
 /** @brief protocol version */
@@ -91,7 +101,7 @@ typedef enum
 } RDPINPUT_PEN_FLAGS;
 
 /** @brief a contact point */
-struct _RDPINPUT_CONTACT_DATA
+typedef struct
 {
 	UINT32 contactId;
 	UINT16 fieldsPresent; /* Mask of CONTACT_DATA_*_PRESENT values */
@@ -104,28 +114,25 @@ struct _RDPINPUT_CONTACT_DATA
 	INT16 contactRectBottom; /* Present if CONTACT_DATA_CONTACTRECT_PRESENT */
 	UINT32 orientation; /* Present if CONTACT_DATA_ORIENTATION_PRESENT, values in degree, [0-359] */
 	UINT32 pressure;    /* Present if CONTACT_DATA_PRESSURE_PRESENT, normalized value [0-1024] */
-};
-typedef struct _RDPINPUT_CONTACT_DATA RDPINPUT_CONTACT_DATA;
+} RDPINPUT_CONTACT_DATA;
 
 /** @brief a frame containing contact points */
-struct _RDPINPUT_TOUCH_FRAME
+typedef struct
 {
 	UINT16 contactCount;
 	UINT64 frameOffset;
 	RDPINPUT_CONTACT_DATA* contacts;
-};
-typedef struct _RDPINPUT_TOUCH_FRAME RDPINPUT_TOUCH_FRAME;
+} RDPINPUT_TOUCH_FRAME;
 
 /** @brief a touch event with some frames*/
-struct _RDPINPUT_TOUCH_EVENT
+typedef struct
 {
 	UINT32 encodeTime;
 	UINT16 frameCount;
 	RDPINPUT_TOUCH_FRAME* frames;
-};
-typedef struct _RDPINPUT_TOUCH_EVENT RDPINPUT_TOUCH_EVENT;
+} RDPINPUT_TOUCH_EVENT;
 
-struct _RDPINPUT_PEN_CONTACT
+typedef struct
 {
 	UINT8 deviceId;
 	UINT16 fieldsPresent; /* Mask of RDPINPUT_PEN_FIELDS_PRESENT values */
@@ -139,23 +146,25 @@ struct _RDPINPUT_PEN_CONTACT
 	pressure;    /* Present if RDPINPUT_PEN_CONTACT_PRESSURE_PRESENT, normalized value [0-1024] */
 	INT16 tiltX; /* Present if PEN_CONTACT_TILTX_PRESENT, range [-90, 90] */
 	INT16 tiltY; /* Present if PEN_CONTACT_TILTY_PRESENT, range [-90, 90] */
-};
-typedef struct _RDPINPUT_PEN_CONTACT RDPINPUT_PEN_CONTACT;
+} RDPINPUT_PEN_CONTACT;
 
-struct _RDPINPUT_PEN_FRAME
+typedef struct
 {
 	UINT16 contactCount;
 	UINT64 frameOffset;
 	RDPINPUT_PEN_CONTACT* contacts;
-};
-typedef struct _RDPINPUT_PEN_FRAME RDPINPUT_PEN_FRAME;
+} RDPINPUT_PEN_FRAME;
 
 /** @brief a touch event with some frames*/
-struct _RDPINPUT_PEN_EVENT
+typedef struct
 {
 	UINT32 encodeTime;
 	UINT16 frameCount;
 	RDPINPUT_PEN_FRAME* frames;
-};
-typedef struct _RDPINPUT_PEN_EVENT RDPINPUT_PEN_EVENT;
+} RDPINPUT_PEN_EVENT;
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* FREERDP_CHANNEL_RDPEI_H */

@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include "gfxredir_main.h"
 #include <stdio.h>
@@ -27,6 +25,7 @@
 #include <string.h>
 
 #include <winpr/crt.h>
+#include <winpr/assert.h>
 #include <winpr/synch.h>
 #include <winpr/thread.h>
 #include <winpr/stream.h>
@@ -35,7 +34,7 @@
 #include <freerdp/channels/log.h>
 
 #include <freerdp/server/gfxredir.h>
-#include "../gfxredir_common.h"
+#include <gfxredir_common.h>
 
 #define TAG CHANNELS_TAG("gfxredir.server")
 
@@ -47,13 +46,12 @@
 static UINT gfxredir_recv_legacy_caps_pdu(wStream* s, GfxRedirServerContext* context)
 {
 	UINT32 error = CHANNEL_RC_OK;
-	GFXREDIR_LEGACY_CAPS_PDU pdu;
+	GFXREDIR_LEGACY_CAPS_PDU pdu = { 0 };
 
-	if (Stream_GetRemainingLength(s) < 2)
-	{
-		WLog_ERR(TAG, "not enough data!");
+	WINPR_ASSERT(context);
+
+	if (!Stream_CheckAndLogRequiredLength(TAG, s, 2))
 		return ERROR_INVALID_DATA;
-	}
 
 	Stream_Read_UINT16(s, pdu.version); /* version (2 bytes) */
 
@@ -72,13 +70,12 @@ static UINT gfxredir_recv_caps_advertise_pdu(wStream* s, UINT32 length,
                                              GfxRedirServerContext* context)
 {
 	UINT32 error = CHANNEL_RC_OK;
-	GFXREDIR_CAPS_ADVERTISE_PDU pdu;
+	GFXREDIR_CAPS_ADVERTISE_PDU pdu = { 0 };
 
-	if (Stream_GetRemainingLength(s) < length)
-	{
-		WLog_ERR(TAG, "not enough data!");
+	WINPR_ASSERT(context);
+
+	if (!Stream_CheckAndLogRequiredLength(TAG, s, length))
 		return ERROR_INVALID_DATA;
-	}
 
 	pdu.length = length;
 	Stream_GetPointer(s, pdu.caps);
@@ -105,13 +102,12 @@ static UINT gfxredir_recv_caps_advertise_pdu(wStream* s, UINT32 length,
 static UINT gfxredir_recv_present_buffer_ack_pdu(wStream* s, GfxRedirServerContext* context)
 {
 	UINT32 error = CHANNEL_RC_OK;
-	GFXREDIR_PRESENT_BUFFER_ACK_PDU pdu;
+	GFXREDIR_PRESENT_BUFFER_ACK_PDU pdu = { 0 };
 
-	if (Stream_GetRemainingLength(s) < 16)
-	{
-		WLog_ERR(TAG, "not enough data!");
+	WINPR_ASSERT(context);
+
+	if (!Stream_CheckAndLogRequiredLength(TAG, s, 16))
 		return ERROR_INVALID_DATA;
-	}
 
 	Stream_Read_UINT64(s, pdu.windowId);  /* windowId (8 bytes) */
 	Stream_Read_UINT64(s, pdu.presentId); /* presentId (8 bytes) */
@@ -132,9 +128,11 @@ static UINT gfxredir_recv_present_buffer_ack_pdu(wStream* s, GfxRedirServerConte
 static UINT gfxredir_server_receive_pdu(GfxRedirServerContext* context, wStream* s)
 {
 	UINT error = CHANNEL_RC_OK;
-	size_t beg, end;
-	GFXREDIR_HEADER header;
-	beg = Stream_GetPosition(s);
+	GFXREDIR_HEADER header = { 0 };
+
+	WINPR_ASSERT(context);
+
+	const size_t beg = Stream_GetPosition(s);
 
 	if ((error = gfxredir_read_header(s, &header)))
 	{
@@ -175,7 +173,7 @@ static UINT gfxredir_server_receive_pdu(GfxRedirServerContext* context, wStream*
 			break;
 	}
 
-	end = Stream_GetPosition(s);
+	const size_t end = Stream_GetPosition(s);
 
 	if (end != (beg + header.length))
 	{
@@ -194,15 +192,20 @@ static UINT gfxredir_server_receive_pdu(GfxRedirServerContext* context, wStream*
  */
 static UINT gfxredir_server_handle_messages(GfxRedirServerContext* context)
 {
-	DWORD BytesReturned;
-	void* buffer;
 	UINT ret = CHANNEL_RC_OK;
+
+	WINPR_ASSERT(context);
+
 	GfxRedirServerPrivate* priv = context->priv;
+	WINPR_ASSERT(priv);
+
 	wStream* s = priv->input_stream;
 
 	/* Check whether the dynamic channel is ready */
 	if (!priv->isReady)
 	{
+		void* buffer = NULL;
+		DWORD BytesReturned = 0;
 		if (WTSVirtualChannelQuery(priv->gfxredir_channel, WTSVirtualChannelReady, &buffer,
 		                           &BytesReturned) == FALSE)
 		{
@@ -222,6 +225,7 @@ static UINT gfxredir_server_handle_messages(GfxRedirServerContext* context)
 	{
 		Stream_SetPosition(s, 0);
 
+		DWORD BytesReturned = 0;
 		if (!WTSVirtualChannelRead(priv->gfxredir_channel, 0, NULL, 0, &BytesReturned))
 		{
 			if (GetLastError() == ERROR_NO_DATA)
@@ -240,8 +244,9 @@ static UINT gfxredir_server_handle_messages(GfxRedirServerContext* context)
 			return CHANNEL_RC_NO_MEMORY;
 		}
 
-		if (WTSVirtualChannelRead(priv->gfxredir_channel, 0, (PCHAR)Stream_Buffer(s),
-		                          Stream_Capacity(s), &BytesReturned) == FALSE)
+		const ULONG cap = WINPR_ASSERTING_INT_CAST(ULONG, Stream_Capacity(s));
+		if (WTSVirtualChannelRead(priv->gfxredir_channel, 0, (PCHAR)Stream_Buffer(s), cap,
+		                          &BytesReturned) == FALSE)
 		{
 			WLog_ERR(TAG, "WTSVirtualChannelRead failed!");
 			return ERROR_INTERNAL_ERROR;
@@ -274,18 +279,20 @@ static UINT gfxredir_server_handle_messages(GfxRedirServerContext* context)
 static DWORD WINAPI gfxredir_server_thread_func(LPVOID arg)
 {
 	GfxRedirServerContext* context = (GfxRedirServerContext*)arg;
+	WINPR_ASSERT(context);
+
 	GfxRedirServerPrivate* priv = context->priv;
-	DWORD status;
-	DWORD nCount;
-	HANDLE events[8];
+	WINPR_ASSERT(priv);
+
+	HANDLE events[8] = { 0 };
 	UINT error = CHANNEL_RC_OK;
-	nCount = 0;
+	DWORD nCount = 0;
 	events[nCount++] = priv->stopEvent;
 	events[nCount++] = priv->channelEvent;
 
 	while (TRUE)
 	{
-		status = WaitForMultipleObjects(nCount, events, FALSE, INFINITE);
+		const DWORD status = WaitForMultipleObjects(nCount, events, FALSE, INFINITE);
 
 		if (status == WAIT_FAILED)
 		{
@@ -315,15 +322,14 @@ static DWORD WINAPI gfxredir_server_thread_func(LPVOID arg)
  * would be required data length + header. The header will be written
  * to the stream before return.
  *
- * @param cmdId
- * @param length - data length without header
+ * @param cmdId the command identifier
+ * @param length data length without header
  *
  * @return new stream
  */
-static wStream* gfxredir_server_single_packet_new(UINT32 cmdId, UINT32 length)
+static wStream* gfxredir_server_single_packet_new(UINT32 cmdId, size_t length)
 {
-	UINT error;
-	GFXREDIR_HEADER header;
+	GFXREDIR_HEADER header = { 0 };
 	wStream* s = Stream_New(NULL, GFXREDIR_HEADER_SIZE + length);
 
 	if (!s)
@@ -333,9 +339,10 @@ static wStream* gfxredir_server_single_packet_new(UINT32 cmdId, UINT32 length)
 	}
 
 	header.cmdId = cmdId;
-	header.length = GFXREDIR_HEADER_SIZE + length;
+	header.length = WINPR_ASSERTING_INT_CAST(UINT32, GFXREDIR_HEADER_SIZE + length);
 
-	if ((error = gfxredir_write_header(s, &header)))
+	const UINT error = gfxredir_write_header(s, &header);
+	if (error)
 	{
 		WLog_ERR(TAG, "Failed to write header with error %" PRIu32 "!", error);
 		goto error;
@@ -354,11 +361,14 @@ error:
  */
 static UINT gfxredir_server_packet_send(GfxRedirServerContext* context, wStream* s)
 {
-	UINT ret;
-	ULONG written;
+	UINT ret = ERROR_INTERNAL_ERROR;
+	ULONG written = 0;
 
-	if (!WTSVirtualChannelWrite(context->priv->gfxredir_channel, (PCHAR)Stream_Buffer(s),
-	                            Stream_GetPosition(s), &written))
+	WINPR_ASSERT(context);
+
+	const ULONG cap = WINPR_ASSERTING_INT_CAST(ULONG, Stream_GetPosition(s));
+	if (!WTSVirtualChannelWrite(context->priv->gfxredir_channel, (PCHAR)Stream_Buffer(s), cap,
+	                            &written))
 	{
 		WLog_ERR(TAG, "WTSVirtualChannelWrite failed!");
 		ret = ERROR_INTERNAL_ERROR;
@@ -384,6 +394,9 @@ out:
  */
 static UINT gfxredir_send_error(GfxRedirServerContext* context, const GFXREDIR_ERROR_PDU* error)
 {
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(error);
+
 	wStream* s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_ERROR, 4);
 
 	if (!s)
@@ -404,8 +417,8 @@ static UINT gfxredir_send_error(GfxRedirServerContext* context, const GFXREDIR_E
 static UINT gfxredir_send_caps_confirm(GfxRedirServerContext* context,
                                        const GFXREDIR_CAPS_CONFIRM_PDU* graphicsCapsConfirm)
 {
-	UINT ret;
-	wStream* s;
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(graphicsCapsConfirm);
 
 	if (graphicsCapsConfirm->length < GFXREDIR_CAPS_HEADER_SIZE)
 	{
@@ -413,7 +426,8 @@ static UINT gfxredir_send_caps_confirm(GfxRedirServerContext* context,
 		return ERROR_INVALID_DATA;
 	}
 
-	s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_CAPS_CONFIRM, graphicsCapsConfirm->length);
+	wStream* s =
+	    gfxredir_server_single_packet_new(GFXREDIR_CMDID_CAPS_CONFIRM, graphicsCapsConfirm->length);
 
 	if (!s)
 	{
@@ -427,7 +441,7 @@ static UINT gfxredir_send_caps_confirm(GfxRedirServerContext* context,
 	if (graphicsCapsConfirm->length > GFXREDIR_CAPS_HEADER_SIZE)
 		Stream_Write(s, graphicsCapsConfirm->capsData,
 		             graphicsCapsConfirm->length - GFXREDIR_CAPS_HEADER_SIZE);
-	ret = gfxredir_server_packet_send(context, s);
+	const UINT ret = gfxredir_server_packet_send(context, s);
 	if (ret == CHANNEL_RC_OK)
 		context->confirmedCapsVersion = graphicsCapsConfirm->version;
 	return ret;
@@ -441,7 +455,8 @@ static UINT gfxredir_send_caps_confirm(GfxRedirServerContext* context,
 static UINT gfxredir_send_open_pool(GfxRedirServerContext* context,
                                     const GFXREDIR_OPEN_POOL_PDU* openPool)
 {
-	wStream* s;
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(openPool);
 
 	if (context->confirmedCapsVersion != GFXREDIR_CAPS_VERSION2_0)
 	{
@@ -462,8 +477,8 @@ static UINT gfxredir_send_open_pool(GfxRedirServerContext* context,
 		return ERROR_INVALID_DATA;
 	}
 
-	s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_OPEN_POOL,
-	                                      20 + (openPool->sectionNameLength * 2));
+	wStream* s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_OPEN_POOL,
+	                                               20 + (openPool->sectionNameLength * 2));
 
 	if (!s)
 	{
@@ -474,7 +489,7 @@ static UINT gfxredir_send_open_pool(GfxRedirServerContext* context,
 	Stream_Write_UINT64(s, openPool->poolId);
 	Stream_Write_UINT64(s, openPool->poolSize);
 	Stream_Write_UINT32(s, openPool->sectionNameLength);
-	Stream_Write(s, openPool->sectionName, (openPool->sectionNameLength * 2));
+	Stream_Write(s, openPool->sectionName, (2ULL * openPool->sectionNameLength));
 	return gfxredir_server_packet_send(context, s);
 }
 
@@ -486,7 +501,8 @@ static UINT gfxredir_send_open_pool(GfxRedirServerContext* context,
 static UINT gfxredir_send_close_pool(GfxRedirServerContext* context,
                                      const GFXREDIR_CLOSE_POOL_PDU* closePool)
 {
-	wStream* s;
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(closePool);
 
 	if (context->confirmedCapsVersion != GFXREDIR_CAPS_VERSION2_0)
 	{
@@ -494,7 +510,7 @@ static UINT gfxredir_send_close_pool(GfxRedirServerContext* context,
 		return ERROR_INTERNAL_ERROR;
 	}
 
-	s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_CLOSE_POOL, 8);
+	wStream* s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_CLOSE_POOL, 8);
 
 	if (!s)
 	{
@@ -514,7 +530,8 @@ static UINT gfxredir_send_close_pool(GfxRedirServerContext* context,
 static UINT gfxredir_send_create_buffer(GfxRedirServerContext* context,
                                         const GFXREDIR_CREATE_BUFFER_PDU* createBuffer)
 {
-	wStream* s;
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(createBuffer);
 
 	if (context->confirmedCapsVersion != GFXREDIR_CAPS_VERSION2_0)
 	{
@@ -522,7 +539,7 @@ static UINT gfxredir_send_create_buffer(GfxRedirServerContext* context,
 		return ERROR_INTERNAL_ERROR;
 	}
 
-	s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_CREATE_BUFFER, 40);
+	wStream* s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_CREATE_BUFFER, 40);
 
 	if (!s)
 	{
@@ -548,7 +565,8 @@ static UINT gfxredir_send_create_buffer(GfxRedirServerContext* context,
 static UINT gfxredir_send_destroy_buffer(GfxRedirServerContext* context,
                                          const GFXREDIR_DESTROY_BUFFER_PDU* destroyBuffer)
 {
-	wStream* s;
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(destroyBuffer);
 
 	if (context->confirmedCapsVersion != GFXREDIR_CAPS_VERSION2_0)
 	{
@@ -556,7 +574,7 @@ static UINT gfxredir_send_destroy_buffer(GfxRedirServerContext* context,
 		return ERROR_INTERNAL_ERROR;
 	}
 
-	s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_DESTROY_BUFFER, 8);
+	wStream* s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_DESTROY_BUFFER, 8);
 
 	if (!s)
 	{
@@ -576,9 +594,10 @@ static UINT gfxredir_send_destroy_buffer(GfxRedirServerContext* context,
 static UINT gfxredir_send_present_buffer(GfxRedirServerContext* context,
                                          const GFXREDIR_PRESENT_BUFFER_PDU* presentBuffer)
 {
-	UINT32 length;
-	wStream* s;
 	RECTANGLE_32 dummyRect = { 0, 0, 0, 0 };
+
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(presentBuffer);
 
 	if (context->confirmedCapsVersion != GFXREDIR_CAPS_VERSION2_0)
 	{
@@ -592,10 +611,11 @@ static UINT gfxredir_send_present_buffer(GfxRedirServerContext* context,
 		return ERROR_INVALID_DATA;
 	}
 
-	length = 64 + ((presentBuffer->numOpaqueRects ? presentBuffer->numOpaqueRects : 1) *
-	               sizeof(RECTANGLE_32));
+	const size_t length =
+	    64ULL + ((presentBuffer->numOpaqueRects ? presentBuffer->numOpaqueRects : 1) *
+	             sizeof(RECTANGLE_32));
 
-	s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_PRESENT_BUFFER, length);
+	wStream* s = gfxredir_server_single_packet_new(GFXREDIR_CMDID_PRESENT_BUFFER, length);
 
 	if (!s)
 	{
@@ -631,11 +651,14 @@ static UINT gfxredir_send_present_buffer(GfxRedirServerContext* context,
 static UINT gfxredir_server_open(GfxRedirServerContext* context)
 {
 	UINT rc = ERROR_INTERNAL_ERROR;
+	WINPR_ASSERT(context);
+
 	GfxRedirServerPrivate* priv = context->priv;
+	WINPR_ASSERT(priv);
+
 	DWORD BytesReturned = 0;
 	PULONG pSessionId = NULL;
-	void* buffer;
-	buffer = NULL;
+	void* buffer = NULL;
 	priv->SessionId = WTS_CURRENT_SESSION;
 
 	if (WTSQuerySessionInformationA(context->vcm, WTS_CURRENT_SESSION, WTSSessionId,
@@ -648,8 +671,8 @@ static UINT gfxredir_server_open(GfxRedirServerContext* context)
 
 	priv->SessionId = (DWORD)*pSessionId;
 	WTSFreeMemory(pSessionId);
-	priv->gfxredir_channel = (HANDLE)WTSVirtualChannelOpenEx(
-	    priv->SessionId, GFXREDIR_DVC_CHANNEL_NAME, WTS_CHANNEL_OPTION_DYNAMIC);
+	priv->gfxredir_channel = WTSVirtualChannelOpenEx(priv->SessionId, GFXREDIR_DVC_CHANNEL_NAME,
+	                                                 WTS_CHANNEL_OPTION_DYNAMIC);
 
 	if (!priv->gfxredir_channel)
 	{
@@ -675,7 +698,7 @@ static UINT gfxredir_server_open(GfxRedirServerContext* context)
 		goto out_close;
 	}
 
-	CopyMemory(&priv->channelEvent, buffer, sizeof(HANDLE));
+	priv->channelEvent = *(HANDLE*)buffer;
 	WTSFreeMemory(buffer);
 
 	if (priv->thread == NULL)
@@ -683,16 +706,16 @@ static UINT gfxredir_server_open(GfxRedirServerContext* context)
 		if (!(priv->stopEvent = CreateEvent(NULL, TRUE, FALSE, NULL)))
 		{
 			WLog_ERR(TAG, "CreateEvent failed!");
-			rc = ERROR_INTERNAL_ERROR;
+			goto out_close;
 		}
 
 		if (!(priv->thread =
 		          CreateThread(NULL, 0, gfxredir_server_thread_func, (void*)context, 0, NULL)))
 		{
 			WLog_ERR(TAG, "CreateEvent failed!");
-			CloseHandle(priv->stopEvent);
+			(void)CloseHandle(priv->stopEvent);
 			priv->stopEvent = NULL;
-			rc = ERROR_INTERNAL_ERROR;
+			goto out_close;
 		}
 	}
 
@@ -712,11 +735,14 @@ out_close:
 static UINT gfxredir_server_close(GfxRedirServerContext* context)
 {
 	UINT error = CHANNEL_RC_OK;
+	WINPR_ASSERT(context);
+
 	GfxRedirServerPrivate* priv = context->priv;
+	WINPR_ASSERT(priv);
 
 	if (priv->thread)
 	{
-		SetEvent(priv->stopEvent);
+		(void)SetEvent(priv->stopEvent);
 
 		if (WaitForSingleObject(priv->thread, INFINITE) == WAIT_FAILED)
 		{
@@ -725,8 +751,8 @@ static UINT gfxredir_server_close(GfxRedirServerContext* context)
 			return error;
 		}
 
-		CloseHandle(priv->thread);
-		CloseHandle(priv->stopEvent);
+		(void)CloseHandle(priv->thread);
+		(void)CloseHandle(priv->stopEvent);
 		priv->thread = NULL;
 		priv->stopEvent = NULL;
 	}
@@ -742,9 +768,8 @@ static UINT gfxredir_server_close(GfxRedirServerContext* context)
 
 GfxRedirServerContext* gfxredir_server_context_new(HANDLE vcm)
 {
-	GfxRedirServerContext* context;
-	GfxRedirServerPrivate* priv;
-	context = (GfxRedirServerContext*)calloc(1, sizeof(GfxRedirServerContext));
+	GfxRedirServerContext* context =
+	    (GfxRedirServerContext*)calloc(1, sizeof(GfxRedirServerContext));
 
 	if (!context)
 	{
@@ -752,12 +777,13 @@ GfxRedirServerContext* gfxredir_server_context_new(HANDLE vcm)
 		return NULL;
 	}
 
-	priv = context->priv = (GfxRedirServerPrivate*)calloc(1, sizeof(GfxRedirServerPrivate));
+	GfxRedirServerPrivate* priv = context->priv =
+	    (GfxRedirServerPrivate*)calloc(1, sizeof(GfxRedirServerPrivate));
 
 	if (!context->priv)
 	{
 		WLog_ERR(TAG, "gfxredir_server_context_new(): calloc GfxRedirServerPrivate failed!");
-		goto out_free;
+		goto fail;
 	}
 
 	priv->input_stream = Stream_New(NULL, 4);
@@ -765,7 +791,7 @@ GfxRedirServerContext* gfxredir_server_context_new(HANDLE vcm)
 	if (!priv->input_stream)
 	{
 		WLog_ERR(TAG, "Stream_New failed!");
-		goto out_free_priv;
+		goto fail;
 	}
 
 	context->vcm = vcm;
@@ -781,10 +807,8 @@ GfxRedirServerContext* gfxredir_server_context_new(HANDLE vcm)
 	context->confirmedCapsVersion = GFXREDIR_CAPS_VERSION1;
 	priv->isReady = FALSE;
 	return context;
-out_free_priv:
-	free(context->priv);
-out_free:
-	free(context);
+fail:
+	gfxredir_server_context_free(context);
 	return NULL;
 }
 

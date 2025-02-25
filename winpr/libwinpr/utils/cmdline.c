@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/crt.h>
 #include <winpr/assert.h>
@@ -59,21 +57,16 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
                                void* context, COMMAND_LINE_PRE_FILTER_FN_A preFilter,
                                COMMAND_LINE_POST_FILTER_FN_A postFilter)
 {
-	int i, j;
-	int status;
-	int count;
-	size_t length;
-	BOOL notescaped;
-	const char* sigil;
-	size_t sigil_length;
-	char* keyword;
-	size_t keyword_length;
-	SSIZE_T keyword_index;
-	char* separator;
-	char* value;
-	int toggle;
-	status = 0;
-	notescaped = FALSE;
+	int status = 0;
+	int count = 0;
+	BOOL notescaped = FALSE;
+	const char* sigil = NULL;
+	size_t sigil_length = 0;
+	char* keyword = NULL;
+	size_t keyword_index = 0;
+	char* separator = NULL;
+	char* value = NULL;
+	int toggle = 0;
 
 	if (!argv)
 		return status;
@@ -88,8 +81,9 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
 		return status;
 	}
 
-	for (i = 1; i < argc; i++)
+	for (int i = 1; i < argc; i++)
 	{
+		size_t keyword_length = 0;
 		BOOL found = FALSE;
 		BOOL escaped = TRUE;
 
@@ -113,7 +107,7 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
 		}
 
 		sigil = argv[i];
-		length = strlen(argv[i]);
+		size_t length = strlen(argv[i]);
 
 		if ((sigil[0] == '/') && (flags & COMMAND_LINE_SIGIL_SLASH))
 		{
@@ -202,33 +196,40 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
 			{
 				SSIZE_T separator_index = (separator - argv[i]);
 				SSIZE_T value_index = separator_index + 1;
-				keyword_length = (separator - keyword);
+				keyword_length = WINPR_ASSERTING_INT_CAST(size_t, (separator - keyword));
 				value = &argv[i][value_index];
 			}
 			else
 			{
-				keyword_length = (length - keyword_index);
+				if (length < keyword_index)
+				{
+					log_error(flags, "Failed at index %d [%s]: Argument required", i, argv[i]);
+					return COMMAND_LINE_ERROR;
+				}
+
+				keyword_length = length - keyword_index;
 				value = NULL;
 			}
 
 			if (!escaped)
 				continue;
 
-			for (j = 0; options[j].Name != NULL; j++)
+			for (size_t j = 0; options[j].Name != NULL; j++)
 			{
+				COMMAND_LINE_ARGUMENT_A* cur = &options[j];
 				BOOL match = FALSE;
 
-				if (strncmp(options[j].Name, keyword, keyword_length) == 0)
+				if (strncmp(cur->Name, keyword, keyword_length) == 0)
 				{
-					if (strlen(options[j].Name) == keyword_length)
+					if (strlen(cur->Name) == keyword_length)
 						match = TRUE;
 				}
 
-				if ((!match) && (options[j].Alias != NULL))
+				if ((!match) && (cur->Alias != NULL))
 				{
-					if (strncmp(options[j].Alias, keyword, keyword_length) == 0)
+					if (strncmp(cur->Alias, keyword, keyword_length) == 0)
 					{
-						if (strlen(options[j].Alias) == keyword_length)
+						if (strlen(cur->Alias) == keyword_length)
 							match = TRUE;
 					}
 				}
@@ -237,11 +238,11 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
 					continue;
 
 				found = match;
-				options[j].Index = i;
+				cur->Index = i;
 
 				if ((flags & COMMAND_LINE_SEPARATOR_SPACE) && ((i + 1) < argc))
 				{
-					BOOL argument;
+					BOOL argument = 0;
 					int value_present = 1;
 
 					if (flags & COMMAND_LINE_SIGIL_DASH)
@@ -262,8 +263,8 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
 							value_present = 0;
 					}
 
-					if ((options[j].Flags & COMMAND_LINE_VALUE_REQUIRED) ||
-					    (options[j].Flags & COMMAND_LINE_VALUE_OPTIONAL))
+					if ((cur->Flags & COMMAND_LINE_VALUE_REQUIRED) ||
+					    (cur->Flags & COMMAND_LINE_VALUE_OPTIONAL))
 						argument = TRUE;
 					else
 						argument = FALSE;
@@ -273,7 +274,7 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
 						i++;
 						value = argv[i];
 					}
-					else if (!value_present && (options[j].Flags & COMMAND_LINE_VALUE_OPTIONAL))
+					else if (!value_present && (cur->Flags & COMMAND_LINE_VALUE_OPTIONAL))
 					{
 						value = NULL;
 					}
@@ -286,7 +287,7 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
 
 				if (!(flags & COMMAND_LINE_SEPARATOR_SPACE))
 				{
-					if (value && (options[j].Flags & COMMAND_LINE_VALUE_FLAG))
+					if (value && (cur->Flags & COMMAND_LINE_VALUE_FLAG))
 					{
 						log_error(flags, "Failed at index %d [%s]: Unexpected value", i, argv[i]);
 						return COMMAND_LINE_ERROR_UNEXPECTED_VALUE;
@@ -294,63 +295,62 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
 				}
 				else
 				{
-					if (value && (options[j].Flags & COMMAND_LINE_VALUE_FLAG))
+					if (value && (cur->Flags & COMMAND_LINE_VALUE_FLAG))
 					{
 						i--;
 						value = NULL;
 					}
 				}
 
-				if (!value && (options[j].Flags & COMMAND_LINE_VALUE_REQUIRED))
+				if (!value && (cur->Flags & COMMAND_LINE_VALUE_REQUIRED))
 				{
 					log_error(flags, "Failed at index %d [%s]: Missing value", i, argv[i]);
 					status = COMMAND_LINE_ERROR_MISSING_VALUE;
 					return status;
 				}
 
-				options[j].Flags |= COMMAND_LINE_ARGUMENT_PRESENT;
+				cur->Flags |= COMMAND_LINE_ARGUMENT_PRESENT;
 
 				if (value)
 				{
-					if (!(options[j].Flags &
-					      (COMMAND_LINE_VALUE_OPTIONAL | COMMAND_LINE_VALUE_REQUIRED)))
+					if (!(cur->Flags & (COMMAND_LINE_VALUE_OPTIONAL | COMMAND_LINE_VALUE_REQUIRED)))
 					{
 						log_error(flags, "Failed at index %d [%s]: Unexpected value", i, argv[i]);
 						return COMMAND_LINE_ERROR_UNEXPECTED_VALUE;
 					}
 
-					options[j].Value = value;
-					options[j].Flags |= COMMAND_LINE_VALUE_PRESENT;
+					cur->Value = value;
+					cur->Flags |= COMMAND_LINE_VALUE_PRESENT;
 				}
 				else
 				{
-					if (options[j].Flags & COMMAND_LINE_VALUE_FLAG)
+					if (cur->Flags & COMMAND_LINE_VALUE_FLAG)
 					{
-						options[j].Value = (LPSTR)1;
-						options[j].Flags |= COMMAND_LINE_VALUE_PRESENT;
+						cur->Value = (LPSTR)1;
+						cur->Flags |= COMMAND_LINE_VALUE_PRESENT;
 					}
-					else if (options[j].Flags & COMMAND_LINE_VALUE_BOOL)
+					else if (cur->Flags & COMMAND_LINE_VALUE_BOOL)
 					{
 						if (flags & COMMAND_LINE_SIGIL_ENABLE_DISABLE)
 						{
 							if (toggle == -1)
-								options[j].Value = BoolValueTrue;
+								cur->Value = BoolValueTrue;
 							else if (!toggle)
-								options[j].Value = BoolValueFalse;
+								cur->Value = BoolValueFalse;
 							else
-								options[j].Value = BoolValueTrue;
+								cur->Value = BoolValueTrue;
 						}
 						else
 						{
 							if (sigil[0] == '+')
-								options[j].Value = BoolValueTrue;
+								cur->Value = BoolValueTrue;
 							else if (sigil[0] == '-')
-								options[j].Value = BoolValueFalse;
+								cur->Value = BoolValueFalse;
 							else
-								options[j].Value = BoolValueTrue;
+								cur->Value = BoolValueTrue;
 						}
 
-						options[j].Flags |= COMMAND_LINE_VALUE_PRESENT;
+						cur->Flags |= COMMAND_LINE_VALUE_PRESENT;
 					}
 				}
 
@@ -368,13 +368,13 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
 					}
 				}
 
-				if (options[j].Flags & COMMAND_LINE_PRINT)
+				if (cur->Flags & COMMAND_LINE_PRINT)
 					return COMMAND_LINE_STATUS_PRINT;
-				else if (options[j].Flags & COMMAND_LINE_PRINT_HELP)
+				else if (cur->Flags & COMMAND_LINE_PRINT_HELP)
 					return COMMAND_LINE_STATUS_PRINT_HELP;
-				else if (options[j].Flags & COMMAND_LINE_PRINT_VERSION)
+				else if (cur->Flags & COMMAND_LINE_PRINT_VERSION)
 					return COMMAND_LINE_STATUS_PRINT_VERSION;
-				else if (options[j].Flags & COMMAND_LINE_PRINT_BUILDCONFIG)
+				else if (cur->Flags & COMMAND_LINE_PRINT_BUILDCONFIG)
 					return COMMAND_LINE_STATUS_PRINT_BUILDCONFIG;
 			}
 
@@ -389,18 +389,19 @@ int CommandLineParseArgumentsA(int argc, LPSTR* argv, COMMAND_LINE_ARGUMENT_A* o
 	return status;
 }
 
-int CommandLineParseArgumentsW(int argc, LPWSTR* argv, COMMAND_LINE_ARGUMENT_W* options,
-                               DWORD flags, void* context, COMMAND_LINE_PRE_FILTER_FN_W preFilter,
-                               COMMAND_LINE_POST_FILTER_FN_W postFilter)
+int CommandLineParseArgumentsW(WINPR_ATTR_UNUSED int argc, WINPR_ATTR_UNUSED LPWSTR* argv,
+                               WINPR_ATTR_UNUSED COMMAND_LINE_ARGUMENT_W* options,
+                               WINPR_ATTR_UNUSED DWORD flags, WINPR_ATTR_UNUSED void* context,
+                               WINPR_ATTR_UNUSED COMMAND_LINE_PRE_FILTER_FN_W preFilter,
+                               WINPR_ATTR_UNUSED COMMAND_LINE_POST_FILTER_FN_W postFilter)
 {
+	WLog_ERR("TODO", "TODO: implement");
 	return 0;
 }
 
 int CommandLineClearArgumentsA(COMMAND_LINE_ARGUMENT_A* options)
 {
-	size_t i;
-
-	for (i = 0; options[i].Name != NULL; i++)
+	for (size_t i = 0; options[i].Name != NULL; i++)
 	{
 		options[i].Flags &= COMMAND_LINE_INPUT_FLAG_MASK;
 		options[i].Value = NULL;
@@ -411,9 +412,7 @@ int CommandLineClearArgumentsA(COMMAND_LINE_ARGUMENT_A* options)
 
 int CommandLineClearArgumentsW(COMMAND_LINE_ARGUMENT_W* options)
 {
-	int i;
-
-	for (i = 0; options[i].Name != NULL; i++)
+	for (int i = 0; options[i].Name != NULL; i++)
 	{
 		options[i].Flags &= COMMAND_LINE_INPUT_FLAG_MASK;
 		options[i].Value = NULL;
@@ -425,12 +424,10 @@ int CommandLineClearArgumentsW(COMMAND_LINE_ARGUMENT_W* options)
 const COMMAND_LINE_ARGUMENT_A* CommandLineFindArgumentA(const COMMAND_LINE_ARGUMENT_A* options,
                                                         LPCSTR Name)
 {
-	size_t i;
-
 	WINPR_ASSERT(options);
 	WINPR_ASSERT(Name);
 
-	for (i = 0; options[i].Name != NULL; i++)
+	for (size_t i = 0; options[i].Name != NULL; i++)
 	{
 		if (strcmp(options[i].Name, Name) == 0)
 			return &options[i];
@@ -448,12 +445,10 @@ const COMMAND_LINE_ARGUMENT_A* CommandLineFindArgumentA(const COMMAND_LINE_ARGUM
 const COMMAND_LINE_ARGUMENT_W* CommandLineFindArgumentW(const COMMAND_LINE_ARGUMENT_W* options,
                                                         LPCWSTR Name)
 {
-	size_t i;
-
 	WINPR_ASSERT(options);
 	WINPR_ASSERT(Name);
 
-	for (i = 0; options[i].Name != NULL; i++)
+	for (size_t i = 0; options[i].Name != NULL; i++)
 	{
 		if (_wcscmp(options[i].Name, Name) == 0)
 			return &options[i];
@@ -470,7 +465,7 @@ const COMMAND_LINE_ARGUMENT_W* CommandLineFindArgumentW(const COMMAND_LINE_ARGUM
 
 const COMMAND_LINE_ARGUMENT_A* CommandLineFindNextArgumentA(const COMMAND_LINE_ARGUMENT_A* argument)
 {
-	const COMMAND_LINE_ARGUMENT_A* nextArgument;
+	const COMMAND_LINE_ARGUMENT_A* nextArgument = NULL;
 
 	if (!argument || !argument->Name)
 		return NULL;
@@ -483,24 +478,227 @@ const COMMAND_LINE_ARGUMENT_A* CommandLineFindNextArgumentA(const COMMAND_LINE_A
 	return nextArgument;
 }
 
+static int is_quoted(char c)
+{
+	switch (c)
+	{
+		case '"':
+			return 1;
+		case '\'':
+			return -1;
+		default:
+			return 0;
+	}
+}
+
+static size_t get_element_count(const char* list, BOOL* failed, BOOL fullquoted)
+{
+	size_t count = 0;
+	int quoted = 0;
+	BOOL finished = FALSE;
+	BOOL first = TRUE;
+	const char* it = list;
+
+	if (!list)
+		return 0;
+	if (strlen(list) == 0)
+		return 0;
+
+	while (!finished)
+	{
+		BOOL nextFirst = FALSE;
+		switch (*it)
+		{
+			case '\0':
+				if (quoted != 0)
+				{
+					WLog_ERR(TAG, "Invalid argument (missing closing quote) '%s'", list);
+					*failed = TRUE;
+					return 0;
+				}
+				finished = TRUE;
+				break;
+			case '\'':
+			case '"':
+				if (!fullquoted)
+				{
+					int now = is_quoted(*it);
+					if (now == quoted)
+						quoted = 0;
+					else if (quoted == 0)
+						quoted = now;
+				}
+				break;
+			case ',':
+				if (first)
+				{
+					WLog_ERR(TAG, "Invalid argument (empty list elements) '%s'", list);
+					*failed = TRUE;
+					return 0;
+				}
+				if (quoted == 0)
+				{
+					nextFirst = TRUE;
+					count++;
+				}
+				break;
+			default:
+				break;
+		}
+
+		first = nextFirst;
+		it++;
+	}
+	return count + 1;
+}
+
+static char* get_next_comma(char* string, BOOL fullquoted)
+{
+	const char* log = string;
+	int quoted = 0;
+	BOOL first = TRUE;
+
+	WINPR_ASSERT(string);
+
+	while (TRUE)
+	{
+		switch (*string)
+		{
+			case '\0':
+				if (quoted != 0)
+					WLog_ERR(TAG, "Invalid quoted argument '%s'", log);
+				return NULL;
+
+			case '\'':
+			case '"':
+				if (!fullquoted)
+				{
+					int now = is_quoted(*string);
+					if ((quoted == 0) && !first)
+					{
+						WLog_ERR(TAG, "Invalid quoted argument '%s'", log);
+						return NULL;
+					}
+					if (now == quoted)
+						quoted = 0;
+					else if (quoted == 0)
+						quoted = now;
+				}
+				break;
+
+			case ',':
+				if (first)
+				{
+					WLog_ERR(TAG, "Invalid argument (empty list elements) '%s'", log);
+					return NULL;
+				}
+				if (quoted == 0)
+					return string;
+				break;
+
+			default:
+				break;
+		}
+		first = FALSE;
+		string++;
+	}
+
+	return NULL;
+}
+
+static BOOL is_valid_fullquoted(const char* string)
+{
+	char cur = '\0';
+	char last = '\0';
+	const char quote = *string++;
+
+	/* We did not start with a quote. */
+	if (is_quoted(quote) == 0)
+		return FALSE;
+
+	while ((cur = *string++) != '\0')
+	{
+		/* A quote is found. */
+		if (cur == quote)
+		{
+			/* If the quote was escaped, it is valid. */
+			if (last != '\\')
+			{
+				/* Only allow unescaped quote as last character in string. */
+				if (*string != '\0')
+					return FALSE;
+			}
+			/* If the last quote in the string is escaped, it is wrong. */
+			else if (*string != '\0')
+				return FALSE;
+		}
+		last = cur;
+	}
+
+	/* The string did not terminate with the same quote as it started. */
+	if (last != quote)
+		return FALSE;
+	return TRUE;
+}
+
 char** CommandLineParseCommaSeparatedValuesEx(const char* name, const char* list, size_t* count)
 {
-	char** p;
-	char* str;
-	size_t nArgs;
-	size_t index;
-	size_t nCommas;
-	size_t prefix, len, namelen = 0;
-	nCommas = 0;
+	char** p = NULL;
+	char* str = NULL;
+	size_t nArgs = 0;
+	size_t prefix = 0;
+	size_t len = 0;
+	size_t namelen = 0;
+	BOOL failed = FALSE;
+	char* copy = NULL;
+	char* unquoted = NULL;
+	BOOL fullquoted = FALSE;
 
+	BOOL success = FALSE;
 	if (count == NULL)
-		return NULL;
+		goto fail;
 
 	*count = 0;
-
-	if (!list || strlen(list) == 0)
+	if (list)
 	{
-		if (name)
+		int start = 0;
+		int end = 0;
+		unquoted = copy = _strdup(list);
+		if (!copy)
+			goto fail;
+
+		len = strlen(unquoted);
+		if (len > 0)
+		{
+			start = is_quoted(unquoted[0]);
+			end = is_quoted(unquoted[len - 1]);
+
+			if ((start != 0) && (end != 0))
+			{
+				if (start != end)
+				{
+					WLog_ERR(TAG, "invalid argument (quote mismatch) '%s'", list);
+					goto fail;
+				}
+				if (!is_valid_fullquoted(unquoted))
+					goto fail;
+				unquoted[len - 1] = '\0';
+				unquoted++;
+				len -= 2;
+				fullquoted = TRUE;
+			}
+		}
+	}
+
+	*count = get_element_count(unquoted, &failed, fullquoted);
+	if (failed)
+		goto fail;
+
+	if (*count == 0)
+	{
+		if (!name)
+			goto fail;
+		else
 		{
 			size_t clen = strlen(name);
 			p = (char**)calloc(2UL + clen, sizeof(char*));
@@ -509,41 +707,29 @@ char** CommandLineParseCommaSeparatedValuesEx(const char* name, const char* list
 			{
 				char* dst = (char*)&p[1];
 				p[0] = dst;
-				sprintf_s(dst, clen + 1, "%s", name);
+				(void)sprintf_s(dst, clen + 1, "%s", name);
 				*count = 1;
-				return p;
+				success = TRUE;
+				goto fail;
 			}
 		}
-
-		return NULL;
 	}
 
-	{
-		const char* it = list;
-
-		while ((it = strchr(it, ',')) != NULL)
-		{
-			it++;
-			nCommas++;
-		}
-	}
-
-	nArgs = nCommas + 1;
+	nArgs = *count;
 
 	if (name)
 		nArgs++;
 
 	prefix = (nArgs + 1UL) * sizeof(char*);
-	len = strlen(list);
 	if (name)
 		namelen = strlen(name);
 	p = (char**)calloc(len + prefix + 1 + namelen + 1, sizeof(char*));
 
 	if (!p)
-		return NULL;
+		goto fail;
 
 	str = &((char*)p)[prefix];
-	memcpy(str, list, len);
+	memcpy(str, unquoted, len);
 
 	if (name)
 	{
@@ -553,19 +739,56 @@ char** CommandLineParseCommaSeparatedValuesEx(const char* name, const char* list
 		p[0] = namestr;
 	}
 
-	for (index = name ? 1 : 0; index < nArgs; index++)
+	for (size_t index = name ? 1 : 0; index < nArgs; index++)
 	{
-		char* comma = strchr(str, ',');
-		p[index] = str;
+		char* ptr = str;
+		const int quote = is_quoted(*ptr);
+		char* comma = get_next_comma(str, fullquoted);
+
+		if ((quote != 0) && !fullquoted)
+			ptr++;
+
+		p[index] = ptr;
 
 		if (comma)
 		{
-			str = comma + 1;
+			char* last = comma - 1;
+			const int lastQuote = is_quoted(*last);
+
+			if (!fullquoted)
+			{
+				if (lastQuote != quote)
+				{
+					WLog_ERR(TAG, "invalid argument (quote mismatch) '%s'", list);
+					goto fail;
+				}
+				else if (lastQuote != 0)
+					*last = '\0';
+			}
 			*comma = '\0';
+
+			str = comma + 1;
+		}
+		else if (quote)
+		{
+			char* end = strrchr(ptr, '"');
+			if (!end)
+				goto fail;
+			*end = '\0';
 		}
 	}
 
 	*count = nArgs;
+	success = TRUE;
+fail:
+	free(copy);
+	if (!success)
+	{
+		if (count)
+			*count = 0;
+		free((void*)p);
+		return NULL;
+	}
 	return p;
 }
 
@@ -581,10 +804,9 @@ char* CommandLineToCommaSeparatedValues(int argc, char* argv[])
 
 static const char* filtered(const char* arg, const char* filters[], size_t number)
 {
-	size_t x;
 	if (number == 0)
 		return arg;
-	for (x = 0; x < number; x++)
+	for (size_t x = 0; x < number; x++)
 	{
 		const char* filter = filters[x];
 		size_t len = strlen(filter);
@@ -597,22 +819,21 @@ static const char* filtered(const char* arg, const char* filters[], size_t numbe
 char* CommandLineToCommaSeparatedValuesEx(int argc, char* argv[], const char* filters[],
                                           size_t number)
 {
-	int x;
 	char* str = NULL;
 	size_t offset = 0;
-	size_t size = argc + 1;
+	size_t size = WINPR_ASSERTING_INT_CAST(size_t, argc) + 1;
 	if ((argc <= 0) || !argv)
 		return NULL;
 
-	for (x = 0; x < argc; x++)
+	for (int x = 0; x < argc; x++)
 		size += strlen(argv[x]);
 
 	str = calloc(size, sizeof(char));
 	if (!str)
 		return NULL;
-	for (x = 0; x < argc; x++)
+	for (int x = 0; x < argc; x++)
 	{
-		int rc;
+		int rc = 0;
 		const char* arg = filtered(argv[x], filters, number);
 		if (!arg)
 			continue;
@@ -627,4 +848,15 @@ char* CommandLineToCommaSeparatedValuesEx(int argc, char* argv[], const char* fi
 	if (offset > 0)
 		str[offset - 1] = '\0';
 	return str;
+}
+
+void CommandLineParserFree(char** ptr)
+{
+	union
+	{
+		char* p;
+		char** pp;
+	} uptr;
+	uptr.pp = ptr;
+	free(uptr.p);
 }

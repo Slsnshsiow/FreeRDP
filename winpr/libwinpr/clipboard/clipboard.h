@@ -20,29 +20,27 @@
 #ifndef WINPR_CLIPBOARD_PRIVATE_H
 #define WINPR_CLIPBOARD_PRIVATE_H
 
+#include <winpr/winpr.h>
 #include <winpr/clipboard.h>
 
 #include <winpr/collections.h>
 
-typedef struct _wClipboardFormat wClipboardFormat;
-typedef struct _wClipboardSynthesizer wClipboardSynthesizer;
+typedef struct
+{
+	UINT32 syntheticId;
+	CLIPBOARD_SYNTHESIZE_FN pfnSynthesize;
+} wClipboardSynthesizer;
 
-struct _wClipboardFormat
+typedef struct
 {
 	UINT32 formatId;
 	char* formatName;
 
 	UINT32 numSynthesizers;
 	wClipboardSynthesizer* synthesizers;
-};
+} wClipboardFormat;
 
-struct _wClipboardSynthesizer
-{
-	UINT32 syntheticId;
-	CLIPBOARD_SYNTHESIZE_FN pfnSynthesize;
-};
-
-struct _wClipboard
+struct s_wClipboard
 {
 	UINT64 ownerId;
 
@@ -70,6 +68,10 @@ struct _wClipboard
 	CRITICAL_SECTION lock;
 };
 
-BOOL ClipboardInitSynthesizers(wClipboard* clipboard);
+WINPR_LOCAL BOOL ClipboardInitSynthesizers(wClipboard* clipboard);
+
+WINPR_LOCAL char* parse_uri_to_local_file(const char* uri, size_t uri_len);
+
+extern const char* mime_text_plain;
 
 #endif /* WINPR_CLIPBOARD_PRIVATE_H */

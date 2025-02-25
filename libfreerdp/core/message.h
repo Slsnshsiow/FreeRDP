@@ -133,8 +133,10 @@ FREERDP_LOCAL int update_message_queue_free_message(wMessage* message);
 
 FREERDP_LOCAL int update_message_queue_process_pending_messages(rdpUpdate* update);
 
-FREERDP_LOCAL rdpUpdateProxy* update_message_proxy_new(rdpUpdate* update);
 FREERDP_LOCAL void update_message_proxy_free(rdpUpdateProxy* message);
+
+WINPR_ATTR_MALLOC(update_message_proxy_free, 1)
+FREERDP_LOCAL rdpUpdateProxy* update_message_proxy_new(rdpUpdate* update);
 
 /**
  * Input Message Queue
@@ -160,8 +162,5 @@ struct rdp_input_proxy
 FREERDP_LOCAL int input_message_queue_process_message(rdpInput* input, wMessage* message);
 FREERDP_LOCAL int input_message_queue_free_message(wMessage* message);
 FREERDP_LOCAL int input_message_queue_process_pending_messages(rdpInput* input);
-
-FREERDP_LOCAL rdpInputProxy* input_message_proxy_new(rdpInput* input);
-FREERDP_LOCAL void input_message_proxy_free(rdpInputProxy* proxy);
 
 #endif /* FREERDP_LIB_CORE_MESSAGE_H */

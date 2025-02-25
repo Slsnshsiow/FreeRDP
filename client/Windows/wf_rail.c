@@ -16,12 +16,11 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include <winpr/crt.h>
 #include <freerdp/log.h>
+#include <freerdp/client/rail.h>
 #include <winpr/tchar.h>
 #include <winpr/print.h>
 
@@ -50,13 +49,12 @@ struct wf_rail_window
 
 /* RemoteApp Core Protocol Extension */
 
-struct _WINDOW_STYLE
+typedef struct
 {
 	UINT32 style;
 	const char* name;
 	BOOL multi;
-};
-typedef struct _WINDOW_STYLE WINDOW_STYLE;
+} WINDOW_STYLE;
 
 static const WINDOW_STYLE WINDOW_STYLES[] = { { WS_BORDER, "WS_BORDER", FALSE },
 	                                          { WS_CAPTION, "WS_CAPTION", FALSE },
@@ -113,10 +111,9 @@ static const WINDOW_STYLE EXTENDED_WINDOW_STYLES[] = {
 
 static void PrintWindowStyles(UINT32 style)
 {
-	int i;
 	WLog_INFO(TAG, "\tWindow Styles:\t{");
 
-	for (i = 0; i < ARRAYSIZE(WINDOW_STYLES); i++)
+	for (size_t i = 0; i < ARRAYSIZE(WINDOW_STYLES); i++)
 	{
 		if (style & WINDOW_STYLES[i].style)
 		{
@@ -133,10 +130,9 @@ static void PrintWindowStyles(UINT32 style)
 
 static void PrintExtendedWindowStyles(UINT32 style)
 {
-	int i;
 	WLog_INFO(TAG, "\tExtended Window Styles:\t{");
 
-	for (i = 0; i < ARRAYSIZE(EXTENDED_WINDOW_STYLES); i++)
+	for (size_t i = 0; i < ARRAYSIZE(EXTENDED_WINDOW_STYLES); i++)
 	{
 		if (style & EXTENDED_WINDOW_STYLES[i].style)
 		{
@@ -181,9 +177,9 @@ static void PrintRailWindowState(const WINDOW_ORDER_INFO* orderInfo,
 
 	if (orderInfo->fieldFlags & WINDOW_ORDER_FIELD_TITLE)
 	{
-		char* title = NULL;
-		ConvertFromUnicode(CP_UTF8, 0, (WCHAR*)windowState->titleInfo.string,
-		                   windowState->titleInfo.length / 2, &title, 0, NULL, NULL);
+		const WCHAR* str = (const WCHAR*)windowState->titleInfo.string;
+		char* title =
+		    ConvertWCharNToUtf8Alloc(str, windowState->titleInfo.length / sizeof(WCHAR), NULL);
 		WLog_INFO(TAG, "\tTitleInfo: %s (length = %hu)", title, windowState->titleInfo.length);
 		free(title);
 	}
@@ -230,11 +226,10 @@ static void PrintRailWindowState(const WINDOW_ORDER_INFO* orderInfo,
 
 	if (orderInfo->fieldFlags & WINDOW_ORDER_FIELD_WND_RECTS)
 	{
-		UINT32 index;
 		RECTANGLE_16* rect;
 		WLog_INFO(TAG, "\tnumWindowRects: %u", windowState->numWindowRects);
 
-		for (index = 0; index < windowState->numWindowRects; index++)
+		for (UINT32 index = 0; index < windowState->numWindowRects; index++)
 		{
 			rect = &windowState->windowRects[index];
 			WLog_INFO(TAG, "\twindowRect[%u]: left: %hu top: %hu right: %hu bottom: %hu", index,
@@ -250,11 +245,10 @@ static void PrintRailWindowState(const WINDOW_ORDER_INFO* orderInfo,
 
 	if (orderInfo->fieldFlags & WINDOW_ORDER_FIELD_VISIBILITY)
 	{
-		UINT32 index;
 		RECTANGLE_16* rect;
 		WLog_INFO(TAG, "\tnumVisibilityRects: %u", windowState->numVisibilityRects);
 
-		for (index = 0; index < windowState->numVisibilityRects; index++)
+		for (UINT32 index = 0; index < windowState->numVisibilityRects; index++)
 		{
 			rect = &windowState->visibilityRects[index];
 			WLog_INFO(TAG, "\tvisibilityRect[%u]: left: %hu top: %hu right: %hu bottom: %hu", index,
@@ -436,7 +430,7 @@ static BOOL wf_rail_window_common(rdpContext* context, const WINDOW_ORDER_INFO* 
 		BOOL rc;
 		HANDLE hInstance;
 		WCHAR* titleW = NULL;
-		WNDCLASSEX wndClassEx;
+		WNDCLASSEX wndClassEx = { 0 };
 		railWindow = (wfRailWindow*)calloc(1, sizeof(wfRailWindow));
 
 		if (!railWindow)
@@ -454,6 +448,7 @@ static BOOL wf_rail_window_common(rdpContext* context, const WINDOW_ORDER_INFO* 
 
 		if (fieldFlags & WINDOW_ORDER_FIELD_TITLE)
 		{
+			const WCHAR* str = (const WCHAR*)windowState->titleInfo.string;
 			char* title = NULL;
 
 			if (windowState->titleInfo.length == 0)
@@ -464,9 +459,8 @@ static BOOL wf_rail_window_common(rdpContext* context, const WINDOW_ORDER_INFO* 
 					/* error handled below */
 				}
 			}
-			else if (ConvertFromUnicode(CP_UTF8, 0, (WCHAR*)windowState->titleInfo.string,
-			                            windowState->titleInfo.length / 2, &title, 0, NULL,
-			                            NULL) < 1)
+			else if (!(title = ConvertWCharNToUtf8Alloc(
+			               str, windowState->titleInfo.length / sizeof(WCHAR), NULL)))
 			{
 				WLog_ERR(TAG, "failed to convert window title");
 				/* error handled below */
@@ -486,9 +480,9 @@ static BOOL wf_rail_window_common(rdpContext* context, const WINDOW_ORDER_INFO* 
 			return FALSE;
 		}
 
-		ConvertToUnicode(CP_UTF8, 0, railWindow->title, -1, &titleW, 0);
+		titleW = ConvertUtf8ToWCharAlloc(railWindow->title, NULL);
 		hInstance = GetModuleHandle(NULL);
-		ZeroMemory(&wndClassEx, sizeof(WNDCLASSEX));
+
 		wndClassEx.cbSize = sizeof(WNDCLASSEX);
 		wndClassEx.style = 0;
 		wndClassEx.lpfnWndProc = wf_RailWndProc;
@@ -580,8 +574,8 @@ static BOOL wf_rail_window_common(rdpContext* context, const WINDOW_ORDER_INFO* 
 
 	if (fieldFlags & WINDOW_ORDER_FIELD_TITLE)
 	{
+		const WCHAR* str = (const WCHAR*)windowState->titleInfo.string;
 		char* title = NULL;
-		WCHAR* titleW = NULL;
 
 		if (windowState->titleInfo.length == 0)
 		{
@@ -591,8 +585,8 @@ static BOOL wf_rail_window_common(rdpContext* context, const WINDOW_ORDER_INFO* 
 				return FALSE;
 			}
 		}
-		else if (ConvertFromUnicode(CP_UTF8, 0, (WCHAR*)windowState->titleInfo.string,
-		                            windowState->titleInfo.length / 2, &title, 0, NULL, NULL) < 1)
+		else if (!(title = ConvertWCharNToUtf8Alloc(
+		               str, windowState->titleInfo.length / sizeof(WCHAR), NULL)))
 		{
 			WLog_ERR(TAG, "failed to convert window title");
 			return FALSE;
@@ -600,9 +594,7 @@ static BOOL wf_rail_window_common(rdpContext* context, const WINDOW_ORDER_INFO* 
 
 		free(railWindow->title);
 		railWindow->title = title;
-		ConvertToUnicode(CP_UTF8, 0, railWindow->title, -1, &titleW, 0);
-		SetWindowTextW(railWindow->hWnd, titleW);
-		free(titleW);
+		SetWindowTextW(railWindow->hWnd, str);
 	}
 
 	if (fieldFlags & WINDOW_ORDER_FIELD_CLIENT_AREA_OFFSET)
@@ -627,7 +619,6 @@ static BOOL wf_rail_window_common(rdpContext* context, const WINDOW_ORDER_INFO* 
 
 	if (fieldFlags & WINDOW_ORDER_FIELD_WND_RECTS)
 	{
-		UINT32 index;
 		HRGN hWndRect;
 		HRGN hWndRects;
 		RECTANGLE_16* rect;
@@ -637,7 +628,7 @@ static BOOL wf_rail_window_common(rdpContext* context, const WINDOW_ORDER_INFO* 
 			rect = &(windowState->windowRects[0]);
 			hWndRects = CreateRectRgn(rect->left, rect->top, rect->right, rect->bottom);
 
-			for (index = 1; index < windowState->numWindowRects; index++)
+			for (UINT32 index = 1; index < windowState->numWindowRects; index++)
 			{
 				rect = &(windowState->windowRects[index]);
 				hWndRect = CreateRectRgn(rect->left, rect->top, rect->right, rect->bottom);
@@ -689,8 +680,8 @@ static BOOL wf_rail_window_icon(rdpContext* context, const WINDOW_ORDER_INFO* or
 	int height;
 	HICON hIcon;
 	BOOL bigIcon;
-	ICONINFO iconInfo;
-	BITMAPINFO bitmapInfo;
+	ICONINFO iconInfo = { 0 };
+	BITMAPINFO bitmapInfo = { 0 };
 	wfRailWindow* railWindow;
 	BITMAPINFOHEADER* bitmapInfoHeader;
 	wfContext* wfc = (wfContext*)context;
@@ -708,7 +699,7 @@ static BOOL wf_rail_window_icon(rdpContext* context, const WINDOW_ORDER_INFO* or
 	iconInfo.fIcon = TRUE;
 	iconInfo.xHotspot = 0;
 	iconInfo.yHotspot = 0;
-	ZeroMemory(&bitmapInfo, sizeof(BITMAPINFO));
+
 	bitmapInfoHeader = &(bitmapInfo.bmiHeader);
 	bpp = windowIcon->iconInfo->bpp;
 	width = windowIcon->iconInfo->width;
@@ -872,76 +863,6 @@ static UINT wf_rail_server_system_param(RailClientContext* context,
 	return CHANNEL_RC_OK;
 }
 
-static UINT wf_rail_server_start_cmd(RailClientContext* context)
-{
-	UINT status;
-	RAIL_EXEC_ORDER exec = { 0 };
-	RAIL_SYSPARAM_ORDER sysparam = { 0 };
-	RAIL_CLIENT_STATUS_ORDER clientStatus = { 0 };
-	wfContext* wfc = (wfContext*)context->custom;
-	rdpSettings* settings = wfc->context.settings;
-	clientStatus.flags = TS_RAIL_CLIENTSTATUS_ALLOWLOCALMOVESIZE;
-
-	if (settings->AutoReconnectionEnabled)
-		clientStatus.flags |= TS_RAIL_CLIENTSTATUS_AUTORECONNECT;
-
-	clientStatus.flags |= TS_RAIL_CLIENTSTATUS_ZORDER_SYNC;
-	clientStatus.flags |= TS_RAIL_CLIENTSTATUS_WINDOW_RESIZE_MARGIN_SUPPORTED;
-	clientStatus.flags |= TS_RAIL_CLIENTSTATUS_APPBAR_REMOTING_SUPPORTED;
-	clientStatus.flags |= TS_RAIL_CLIENTSTATUS_POWER_DISPLAY_REQUEST_SUPPORTED;
-	clientStatus.flags |= TS_RAIL_CLIENTSTATUS_BIDIRECTIONAL_CLOAK_SUPPORTED;
-	status = context->ClientInformation(context, &clientStatus);
-
-	if (status != CHANNEL_RC_OK)
-		return status;
-
-	if (settings->RemoteAppLanguageBarSupported)
-	{
-		RAIL_LANGBAR_INFO_ORDER langBarInfo;
-		langBarInfo.languageBarStatus = 0x00000008; /* TF_SFT_HIDDEN */
-		status = context->ClientLanguageBarInfo(context, &langBarInfo);
-
-		/* We want the language bar, but the server might not support it. */
-		switch (status)
-		{
-			case CHANNEL_RC_OK:
-			case ERROR_BAD_CONFIGURATION:
-				break;
-			default:
-				return status;
-		}
-	}
-
-	sysparam.params = 0;
-	sysparam.params |= SPI_MASK_SET_HIGH_CONTRAST;
-	sysparam.highContrast.colorScheme.string = NULL;
-	sysparam.highContrast.colorScheme.length = 0;
-	sysparam.highContrast.flags = 0x7E;
-	sysparam.params |= SPI_MASK_SET_MOUSE_BUTTON_SWAP;
-	sysparam.mouseButtonSwap = FALSE;
-	sysparam.params |= SPI_MASK_SET_KEYBOARD_PREF;
-	sysparam.keyboardPref = FALSE;
-	sysparam.params |= SPI_MASK_SET_DRAG_FULL_WINDOWS;
-	sysparam.dragFullWindows = FALSE;
-	sysparam.params |= SPI_MASK_SET_KEYBOARD_CUES;
-	sysparam.keyboardCues = FALSE;
-	sysparam.params |= SPI_MASK_SET_WORK_AREA;
-	sysparam.workArea.left = 0;
-	sysparam.workArea.top = 0;
-	sysparam.workArea.right = settings->DesktopWidth;
-	sysparam.workArea.bottom = settings->DesktopHeight;
-	sysparam.dragFullWindows = FALSE;
-	status = context->ClientSystemParam(context, &sysparam);
-
-	if (status != CHANNEL_RC_OK)
-		return status;
-
-	exec.RemoteApplicationProgram = settings->RemoteApplicationProgram;
-	exec.RemoteApplicationWorkingDir = settings->ShellWorkingDirectory;
-	exec.RemoteApplicationArguments = settings->RemoteApplicationCmdLine;
-	return context->ClientExecute(context, &exec);
-}
-
 /**
  * Function description
  *
@@ -950,7 +871,7 @@ static UINT wf_rail_server_start_cmd(RailClientContext* context)
 static UINT wf_rail_server_handshake(RailClientContext* context,
                                      const RAIL_HANDSHAKE_ORDER* handshake)
 {
-	return wf_rail_server_start_cmd(context);
+	return client_rail_server_start_cmd(context);
 }
 
 /**
@@ -961,7 +882,7 @@ static UINT wf_rail_server_handshake(RailClientContext* context,
 static UINT wf_rail_server_handshake_ex(RailClientContext* context,
                                         const RAIL_HANDSHAKE_EX_ORDER* handshakeEx)
 {
-	return wf_rail_server_start_cmd(context);
+	return client_rail_server_start_cmd(context);
 }
 
 /**
@@ -1010,8 +931,6 @@ static UINT wf_rail_server_get_appid_response(RailClientContext* context,
 
 void wf_rail_invalidate_region(wfContext* wfc, REGION16* invalidRegion)
 {
-	int index;
-	int count;
 	RECT updateRect;
 	RECTANGLE_16 windowRect;
 	ULONG_PTR* pKeys = NULL;
@@ -1019,9 +938,9 @@ void wf_rail_invalidate_region(wfContext* wfc, REGION16* invalidRegion)
 	const RECTANGLE_16* extents;
 	REGION16 windowInvalidRegion;
 	region16_init(&windowInvalidRegion);
-	count = HashTable_GetKeys(wfc->railWindows, &pKeys);
+	size_t count = HashTable_GetKeys(wfc->railWindows, &pKeys);
 
-	for (index = 0; index < count; index++)
+	for (size_t index = 0; index < count; index++)
 	{
 		railWindow = (wfRailWindow*)HashTable_GetItemValue(wfc->railWindows, (void*)pKeys[index]);
 

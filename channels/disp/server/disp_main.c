@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include "disp_main.h"
 #include <stdio.h>
@@ -27,6 +25,7 @@
 #include <string.h>
 
 #include <winpr/crt.h>
+#include <winpr/assert.h>
 #include <winpr/synch.h>
 #include <winpr/thread.h>
 #include <winpr/stream.h>
@@ -47,7 +46,7 @@
 
 static wStream* disp_server_single_packet_new(UINT32 type, UINT32 length)
 {
-	UINT error;
+	UINT error = 0;
 	DISPLAY_CONTROL_HEADER header;
 	wStream* s = Stream_New(NULL, DISPLAY_CONTROL_HEADER_LENGTH + length);
 
@@ -72,8 +71,28 @@ error:
 	return NULL;
 }
 
-static BOOL disp_server_is_monitor_layout_valid(DISPLAY_CONTROL_MONITOR_LAYOUT* monitor)
+static void disp_server_sanitize_monitor_layout(DISPLAY_CONTROL_MONITOR_LAYOUT* monitor)
 {
+	if (monitor->PhysicalWidth < DISPLAY_CONTROL_MIN_PHYSICAL_MONITOR_WIDTH ||
+	    monitor->PhysicalWidth > DISPLAY_CONTROL_MAX_PHYSICAL_MONITOR_WIDTH ||
+	    monitor->PhysicalHeight < DISPLAY_CONTROL_MIN_PHYSICAL_MONITOR_HEIGHT ||
+	    monitor->PhysicalHeight > DISPLAY_CONTROL_MAX_PHYSICAL_MONITOR_HEIGHT)
+	{
+		if (monitor->PhysicalWidth != 0 || monitor->PhysicalHeight != 0)
+			WLog_DBG(
+			    TAG,
+			    "Sanitizing invalid physical monitor size. Old physical monitor size: [%" PRIu32
+			    ", %" PRIu32 "]",
+			    monitor->PhysicalWidth, monitor->PhysicalHeight);
+
+		monitor->PhysicalWidth = monitor->PhysicalHeight = 0;
+	}
+}
+
+static BOOL disp_server_is_monitor_layout_valid(const DISPLAY_CONTROL_MONITOR_LAYOUT* monitor)
+{
+	WINPR_ASSERT(monitor);
+
 	if (monitor->Width < DISPLAY_CONTROL_MIN_MONITOR_WIDTH ||
 	    monitor->Width > DISPLAY_CONTROL_MAX_MONITOR_WIDTH)
 	{
@@ -84,23 +103,7 @@ static BOOL disp_server_is_monitor_layout_valid(DISPLAY_CONTROL_MONITOR_LAYOUT* 
 	if (monitor->Height < DISPLAY_CONTROL_MIN_MONITOR_HEIGHT ||
 	    monitor->Height > DISPLAY_CONTROL_MAX_MONITOR_HEIGHT)
 	{
-		WLog_WARN(TAG, "Received invalid value for monitor->Height: %" PRIu32 "", monitor->Width);
-		return FALSE;
-	}
-
-	if (monitor->PhysicalWidth < DISPLAY_CONTROL_MIN_PHYSICAL_MONITOR_WIDTH ||
-	    monitor->PhysicalWidth > DISPLAY_CONTROL_MAX_PHYSICAL_MONITOR_WIDTH)
-	{
-		WLog_WARN(TAG, "Received invalid value for monitor->PhysicalWidth: %" PRIu32 "",
-		          monitor->PhysicalWidth);
-		return FALSE;
-	}
-
-	if (monitor->PhysicalHeight < DISPLAY_CONTROL_MIN_PHYSICAL_MONITOR_HEIGHT ||
-	    monitor->PhysicalHeight > DISPLAY_CONTROL_MAX_PHYSICAL_MONITOR_HEIGHT)
-	{
-		WLog_WARN(TAG, "Received invalid value for monitor->Height: %" PRIu32 "",
-		          monitor->PhysicalHeight);
+		WLog_WARN(TAG, "Received invalid value for monitor->Height: %" PRIu32 "", monitor->Height);
 		return FALSE;
 	}
 
@@ -124,15 +127,13 @@ static BOOL disp_server_is_monitor_layout_valid(DISPLAY_CONTROL_MONITOR_LAYOUT* 
 static UINT disp_recv_display_control_monitor_layout_pdu(wStream* s, DispServerContext* context)
 {
 	UINT32 error = CHANNEL_RC_OK;
-	UINT32 index;
-	DISPLAY_CONTROL_MONITOR_LAYOUT_PDU pdu;
-	DISPLAY_CONTROL_MONITOR_LAYOUT* monitor;
+	DISPLAY_CONTROL_MONITOR_LAYOUT_PDU pdu = { 0 };
 
-	if (Stream_GetRemainingLength(s) < 8)
-	{
-		WLog_ERR(TAG, "not enough data!");
+	WINPR_ASSERT(s);
+	WINPR_ASSERT(context);
+
+	if (!Stream_CheckAndLogRequiredLength(TAG, s, 8))
 		return ERROR_INVALID_DATA;
-	}
 
 	Stream_Read_UINT32(s, pdu.MonitorLayoutSize); /* MonitorLayoutSize (4 bytes) */
 
@@ -152,11 +153,9 @@ static UINT disp_recv_display_control_monitor_layout_pdu(wStream* s, DispServerC
 		return ERROR_INVALID_DATA;
 	}
 
-	if (Stream_GetRemainingLength(s) / DISPLAY_CONTROL_MONITOR_LAYOUT_SIZE < pdu.NumMonitors)
-	{
-		WLog_ERR(TAG, "not enough data!");
+	if (!Stream_CheckAndLogRequiredLengthOfSize(TAG, s, pdu.NumMonitors,
+	                                            DISPLAY_CONTROL_MONITOR_LAYOUT_SIZE))
 		return ERROR_INVALID_DATA;
-	}
 
 	pdu.Monitors = (DISPLAY_CONTROL_MONITOR_LAYOUT*)calloc(pdu.NumMonitors,
 	                                                       sizeof(DISPLAY_CONTROL_MONITOR_LAYOUT));
@@ -170,12 +169,13 @@ static UINT disp_recv_display_control_monitor_layout_pdu(wStream* s, DispServerC
 	WLog_DBG(TAG, "disp_recv_display_control_monitor_layout_pdu: NumMonitors=%" PRIu32 "",
 	         pdu.NumMonitors);
 
-	for (index = 0; index < pdu.NumMonitors; index++)
+	for (UINT32 index = 0; index < pdu.NumMonitors; index++)
 	{
-		monitor = &(pdu.Monitors[index]);
+		DISPLAY_CONTROL_MONITOR_LAYOUT* monitor = &(pdu.Monitors[index]);
+
 		Stream_Read_UINT32(s, monitor->Flags);              /* Flags (4 bytes) */
-		Stream_Read_UINT32(s, monitor->Left);               /* Left (4 bytes) */
-		Stream_Read_UINT32(s, monitor->Top);                /* Top (4 bytes) */
+		Stream_Read_INT32(s, monitor->Left);                /* Left (4 bytes) */
+		Stream_Read_INT32(s, monitor->Top);                 /* Top (4 bytes) */
 		Stream_Read_UINT32(s, monitor->Width);              /* Width (4 bytes) */
 		Stream_Read_UINT32(s, monitor->Height);             /* Height (4 bytes) */
 		Stream_Read_UINT32(s, monitor->PhysicalWidth);      /* PhysicalWidth (4 bytes) */
@@ -183,9 +183,11 @@ static UINT disp_recv_display_control_monitor_layout_pdu(wStream* s, DispServerC
 		Stream_Read_UINT32(s, monitor->Orientation);        /* Orientation (4 bytes) */
 		Stream_Read_UINT32(s, monitor->DesktopScaleFactor); /* DesktopScaleFactor (4 bytes) */
 		Stream_Read_UINT32(s, monitor->DeviceScaleFactor);  /* DeviceScaleFactor (4 bytes) */
+
+		disp_server_sanitize_monitor_layout(monitor);
 		WLog_DBG(TAG,
-		         "\t%d : Flags: 0x%08" PRIX32 " Left/Top: (%" PRId32 ",%" PRId32 ") W/H=%" PRIu32
-		         "x%" PRIu32 ")",
+		         "\t%" PRIu32 " : Flags: 0x%08" PRIX32 " Left/Top: (%" PRId32 ",%" PRId32
+		         ") W/H=%" PRIu32 "x%" PRIu32 ")",
 		         index, monitor->Flags, monitor->Left, monitor->Top, monitor->Width,
 		         monitor->Height);
 		WLog_DBG(TAG,
@@ -211,8 +213,13 @@ out:
 static UINT disp_server_receive_pdu(DispServerContext* context, wStream* s)
 {
 	UINT error = CHANNEL_RC_OK;
-	size_t beg, end;
-	DISPLAY_CONTROL_HEADER header;
+	size_t beg = 0;
+	size_t end = 0;
+	DISPLAY_CONTROL_HEADER header = { 0 };
+
+	WINPR_ASSERT(s);
+	WINPR_ASSERT(context);
+
 	beg = Stream_GetPosition(s);
 
 	if ((error = disp_read_header(s, &header)))
@@ -242,7 +249,7 @@ static UINT disp_server_receive_pdu(DispServerContext* context, wStream* s)
 
 	if (end != (beg + header.length))
 	{
-		WLog_ERR(TAG, "Unexpected DISP pdu end: Actual: %d, Expected: %" PRIu32 "", end,
+		WLog_ERR(TAG, "Unexpected DISP pdu end: Actual: %" PRIuz ", Expected: %" PRIuz "", end,
 		         (beg + header.length));
 		Stream_SetPosition(s, (beg + header.length));
 	}
@@ -252,11 +259,19 @@ static UINT disp_server_receive_pdu(DispServerContext* context, wStream* s)
 
 static UINT disp_server_handle_messages(DispServerContext* context)
 {
-	DWORD BytesReturned;
-	void* buffer;
+	DWORD BytesReturned = 0;
+	void* buffer = NULL;
 	UINT ret = CHANNEL_RC_OK;
-	DispServerPrivate* priv = context->priv;
-	wStream* s = priv->input_stream;
+	DispServerPrivate* priv = NULL;
+	wStream* s = NULL;
+
+	WINPR_ASSERT(context);
+
+	priv = context->priv;
+	WINPR_ASSERT(priv);
+
+	s = priv->input_stream;
+	WINPR_ASSERT(s);
 
 	/* Check whether the dynamic channel is ready */
 	if (!priv->isReady)
@@ -296,7 +311,11 @@ static UINT disp_server_handle_messages(DispServerContext* context)
 		return CHANNEL_RC_NO_MEMORY;
 	}
 
-	if (WTSVirtualChannelRead(priv->disp_channel, 0, (PCHAR)Stream_Buffer(s), Stream_Capacity(s),
+	const size_t cap = Stream_Capacity(s);
+	if (cap > UINT32_MAX)
+		return CHANNEL_RC_NO_BUFFER;
+
+	if (WTSVirtualChannelRead(priv->disp_channel, 0, Stream_BufferAs(s, char), (ULONG)cap,
 	                          &BytesReturned) == FALSE)
 	{
 		WLog_ERR(TAG, "WTSVirtualChannelRead failed!");
@@ -324,12 +343,17 @@ static UINT disp_server_handle_messages(DispServerContext* context)
 static DWORD WINAPI disp_server_thread_func(LPVOID arg)
 {
 	DispServerContext* context = (DispServerContext*)arg;
-	DispServerPrivate* priv = context->priv;
-	DWORD status;
-	DWORD nCount;
-	HANDLE events[8];
+	DispServerPrivate* priv = NULL;
+	DWORD status = 0;
+	DWORD nCount = 0;
+	HANDLE events[8] = { 0 };
 	UINT error = CHANNEL_RC_OK;
-	nCount = 0;
+
+	WINPR_ASSERT(context);
+
+	priv = context->priv;
+	WINPR_ASSERT(priv);
+
 	events[nCount++] = priv->stopEvent;
 	events[nCount++] = priv->channelEvent;
 
@@ -368,11 +392,18 @@ static DWORD WINAPI disp_server_thread_func(LPVOID arg)
 static UINT disp_server_open(DispServerContext* context)
 {
 	UINT rc = ERROR_INTERNAL_ERROR;
-	DispServerPrivate* priv = context->priv;
+	DispServerPrivate* priv = NULL;
 	DWORD BytesReturned = 0;
 	PULONG pSessionId = NULL;
-	void* buffer;
-	buffer = NULL;
+	void* buffer = NULL;
+	UINT32 channelId = 0;
+	BOOL status = TRUE;
+
+	WINPR_ASSERT(context);
+
+	priv = context->priv;
+	WINPR_ASSERT(priv);
+
 	priv->SessionId = WTS_CURRENT_SESSION;
 
 	if (WTSQuerySessionInformationA(context->vcm, WTS_CURRENT_SESSION, WTSSessionId,
@@ -385,13 +416,23 @@ static UINT disp_server_open(DispServerContext* context)
 
 	priv->SessionId = (DWORD)*pSessionId;
 	WTSFreeMemory(pSessionId);
-	priv->disp_channel = (HANDLE)WTSVirtualChannelOpenEx(priv->SessionId, DISP_DVC_CHANNEL_NAME,
-	                                                     WTS_CHANNEL_OPTION_DYNAMIC);
+	priv->disp_channel =
+	    WTSVirtualChannelOpenEx(priv->SessionId, DISP_DVC_CHANNEL_NAME, WTS_CHANNEL_OPTION_DYNAMIC);
 
 	if (!priv->disp_channel)
 	{
 		WLog_ERR(TAG, "WTSVirtualChannelOpenEx failed!");
 		rc = GetLastError();
+		goto out_close;
+	}
+
+	channelId = WTSChannelGetIdByHandle(priv->disp_channel);
+
+	IFCALLRET(context->ChannelIdAssigned, status, context, channelId);
+	if (!status)
+	{
+		WLog_ERR(TAG, "context->ChannelIdAssigned failed!");
+		rc = ERROR_INTERNAL_ERROR;
 		goto out_close;
 	}
 
@@ -412,7 +453,7 @@ static UINT disp_server_open(DispServerContext* context)
 		goto out_close;
 	}
 
-	CopyMemory(&priv->channelEvent, buffer, sizeof(HANDLE));
+	priv->channelEvent = *(HANDLE*)buffer;
 	WTSFreeMemory(buffer);
 
 	if (priv->thread == NULL)
@@ -421,21 +462,23 @@ static UINT disp_server_open(DispServerContext* context)
 		{
 			WLog_ERR(TAG, "CreateEvent failed!");
 			rc = ERROR_INTERNAL_ERROR;
+			goto out_close;
 		}
 
 		if (!(priv->thread =
 		          CreateThread(NULL, 0, disp_server_thread_func, (void*)context, 0, NULL)))
 		{
 			WLog_ERR(TAG, "CreateEvent failed!");
-			CloseHandle(priv->stopEvent);
+			(void)CloseHandle(priv->stopEvent);
 			priv->stopEvent = NULL;
 			rc = ERROR_INTERNAL_ERROR;
+			goto out_close;
 		}
 	}
 
 	return CHANNEL_RC_OK;
 out_close:
-	WTSVirtualChannelClose(priv->disp_channel);
+	(void)WTSVirtualChannelClose(priv->disp_channel);
 	priv->disp_channel = NULL;
 	priv->channelEvent = NULL;
 	return rc;
@@ -443,11 +486,17 @@ out_close:
 
 static UINT disp_server_packet_send(DispServerContext* context, wStream* s)
 {
-	UINT ret;
-	ULONG written;
+	UINT ret = 0;
+	ULONG written = 0;
 
-	if (!WTSVirtualChannelWrite(context->priv->disp_channel, (PCHAR)Stream_Buffer(s),
-	                            Stream_GetPosition(s), &written))
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(s);
+
+	const size_t pos = Stream_GetPosition(s);
+
+	WINPR_ASSERT(pos <= UINT32_MAX);
+	if (!WTSVirtualChannelWrite(context->priv->disp_channel, Stream_BufferAs(s, char), (UINT32)pos,
+	                            &written))
 	{
 		WLog_ERR(TAG, "WTSVirtualChannelWrite failed!");
 		ret = ERROR_INTERNAL_ERROR;
@@ -473,7 +522,11 @@ out:
  */
 static UINT disp_server_send_caps_pdu(DispServerContext* context)
 {
-	wStream* s = disp_server_single_packet_new(DISPLAY_CONTROL_PDU_TYPE_CAPS, 12);
+	wStream* s = NULL;
+
+	WINPR_ASSERT(context);
+
+	s = disp_server_single_packet_new(DISPLAY_CONTROL_PDU_TYPE_CAPS, 12);
 
 	if (!s)
 	{
@@ -495,11 +548,16 @@ static UINT disp_server_send_caps_pdu(DispServerContext* context)
 static UINT disp_server_close(DispServerContext* context)
 {
 	UINT error = CHANNEL_RC_OK;
-	DispServerPrivate* priv = context->priv;
+	DispServerPrivate* priv = NULL;
+
+	WINPR_ASSERT(context);
+
+	priv = context->priv;
+	WINPR_ASSERT(priv);
 
 	if (priv->thread)
 	{
-		SetEvent(priv->stopEvent);
+		(void)SetEvent(priv->stopEvent);
 
 		if (WaitForSingleObject(priv->thread, INFINITE) == WAIT_FAILED)
 		{
@@ -508,15 +566,15 @@ static UINT disp_server_close(DispServerContext* context)
 			return error;
 		}
 
-		CloseHandle(priv->thread);
-		CloseHandle(priv->stopEvent);
+		(void)CloseHandle(priv->thread);
+		(void)CloseHandle(priv->stopEvent);
 		priv->thread = NULL;
 		priv->stopEvent = NULL;
 	}
 
 	if (priv->disp_channel)
 	{
-		WTSVirtualChannelClose(priv->disp_channel);
+		(void)WTSVirtualChannelClose(priv->disp_channel);
 		priv->disp_channel = NULL;
 	}
 
@@ -525,14 +583,14 @@ static UINT disp_server_close(DispServerContext* context)
 
 DispServerContext* disp_server_context_new(HANDLE vcm)
 {
-	DispServerContext* context;
-	DispServerPrivate* priv;
+	DispServerContext* context = NULL;
+	DispServerPrivate* priv = NULL;
 	context = (DispServerContext*)calloc(1, sizeof(DispServerContext));
 
 	if (!context)
 	{
 		WLog_ERR(TAG, "disp_server_context_new(): calloc DispServerContext failed!");
-		goto out_free;
+		goto fail;
 	}
 
 	priv = context->priv = (DispServerPrivate*)calloc(1, sizeof(DispServerPrivate));
@@ -540,7 +598,7 @@ DispServerContext* disp_server_context_new(HANDLE vcm)
 	if (!context->priv)
 	{
 		WLog_ERR(TAG, "disp_server_context_new(): calloc DispServerPrivate failed!");
-		goto out_free;
+		goto fail;
 	}
 
 	priv->input_stream = Stream_New(NULL, 4);
@@ -548,7 +606,7 @@ DispServerContext* disp_server_context_new(HANDLE vcm)
 	if (!priv->input_stream)
 	{
 		WLog_ERR(TAG, "Stream_New failed!");
-		goto out_free_priv;
+		goto fail;
 	}
 
 	context->vcm = vcm;
@@ -557,10 +615,11 @@ DispServerContext* disp_server_context_new(HANDLE vcm)
 	context->DisplayControlCaps = disp_server_send_caps_pdu;
 	priv->isReady = FALSE;
 	return context;
-out_free_priv:
-	free(context->priv);
-out_free:
-	free(context);
+fail:
+	WINPR_PRAGMA_DIAG_PUSH
+	WINPR_PRAGMA_DIAG_IGNORED_MISMATCHED_DEALLOC
+	disp_server_context_free(context);
+	WINPR_PRAGMA_DIAG_POP
 	return NULL;
 }
 
@@ -569,10 +628,9 @@ void disp_server_context_free(DispServerContext* context)
 	if (!context)
 		return;
 
-	disp_server_close(context);
-
 	if (context->priv)
 	{
+		disp_server_close(context);
 		Stream_Free(context->priv->input_stream, TRUE);
 		free(context->priv);
 	}

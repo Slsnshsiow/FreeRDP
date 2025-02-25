@@ -19,14 +19,13 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include <winpr/windows.h>
+#include <winpr/library.h>
 
 #include <winpr/crt.h>
-#include <winpr/credui.h>
+#include <winpr/assert.h>
 
 #include <errno.h>
 #include <stdio.h>
@@ -46,9 +45,9 @@
 #endif
 
 #include <freerdp/log.h>
-#include <freerdp/event.h>
 #include <freerdp/freerdp.h>
 #include <freerdp/constants.h>
+#include <freerdp/settings.h>
 
 #include <freerdp/locale/keyboard.h>
 #include <freerdp/codec/region.h>
@@ -60,13 +59,12 @@
 #include "wf_rail.h"
 #include "wf_channels.h"
 #include "wf_graphics.h"
-#include "wf_cliprdr.h"
-
-#include "wf_client.h"
 
 #include "resource/resource.h"
 
 #define TAG CLIENT_TAG("windows")
+
+#define WM_FREERDP_SHOWWINDOW (WM_USER + 100)
 
 static BOOL wf_has_console(void)
 {
@@ -84,7 +82,6 @@ static BOOL wf_has_console(void)
 
 static BOOL wf_end_paint(rdpContext* context)
 {
-	int i;
 	rdpGdi* gdi;
 	int ninvalid;
 	RECT updateRect;
@@ -102,7 +99,7 @@ static BOOL wf_end_paint(rdpContext* context)
 
 	region16_init(&invalidRegion);
 
-	for (i = 0; i < ninvalid; i++)
+	for (int i = 0; i < ninvalid; i++)
 	{
 		invalidRect.left = cinvalid[i].x;
 		invalidRect.top = cinvalid[i].y;
@@ -118,6 +115,9 @@ static BOOL wf_end_paint(rdpContext* context)
 		updateRect.top = extents->top;
 		updateRect.right = extents->right;
 		updateRect.bottom = extents->bottom;
+
+		wf_scale_rect(wfc, &updateRect);
+
 		InvalidateRect(wfc->hwnd, &updateRect, FALSE);
 
 		if (wfc->rail)
@@ -138,9 +138,8 @@ static BOOL wf_end_paint(rdpContext* context)
 		}
 #endif
 
-		ShowWindow(wfc->hwnd, SW_SHOWNORMAL);
+		PostMessage(wfc->hwnd, WM_FREERDP_SHOWWINDOW, 0, 0);
 		WLog_INFO(TAG, "Window is shown!");
-		fflush(stdout);
 	}
 	return TRUE;
 }
@@ -178,11 +177,14 @@ static BOOL wf_desktop_resize(rdpContext* context)
 	{
 		same = (wfc->primary == wfc->drawing) ? TRUE : FALSE;
 		wf_image_free(wfc->primary);
-		wfc->primary = wf_image_new(wfc, settings->DesktopWidth, settings->DesktopHeight,
-		                            context->gdi->dstFormat, NULL);
+		wfc->primary =
+		    wf_image_new(wfc, freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth),
+		                 freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight),
+		                 context->gdi->dstFormat, NULL);
 	}
 
-	if (!gdi_resize_ex(context->gdi, settings->DesktopWidth, settings->DesktopHeight, 0,
+	if (!gdi_resize_ex(context->gdi, freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth),
+	                   freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight), 0,
 	                   context->gdi->dstFormat, wfc->primary->pdata, NULL))
 		return FALSE;
 
@@ -191,9 +193,11 @@ static BOOL wf_desktop_resize(rdpContext* context)
 
 	if (wfc->fullscreen != TRUE)
 	{
-		if (wfc->hwnd)
-			SetWindowPos(wfc->hwnd, HWND_TOP, -1, -1, settings->DesktopWidth + wfc->diff.x,
-			             settings->DesktopHeight + wfc->diff.y, SWP_NOMOVE);
+		if (wfc->hwnd && !freerdp_settings_get_bool(settings, FreeRDP_SmartSizing))
+			SetWindowPos(wfc->hwnd, HWND_TOP, -1, -1,
+			             freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth) + wfc->diff.x,
+			             freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight) + wfc->diff.y,
+			             SWP_NOMOVE);
 	}
 	else
 	{
@@ -214,30 +218,35 @@ static BOOL wf_pre_connect(freerdp* instance)
 	rdpContext* context;
 	rdpSettings* settings;
 
-	if (!instance || !instance->context || !instance->settings)
-		return FALSE;
+	WINPR_ASSERT(instance);
+	WINPR_ASSERT(instance->context);
+	WINPR_ASSERT(instance->context->settings);
 
 	context = instance->context;
 	wfc = (wfContext*)instance->context;
-	settings = instance->settings;
-	settings->OsMajorType = OSMAJORTYPE_WINDOWS;
-	settings->OsMinorType = OSMINORTYPE_WINDOWS_NT;
-	wfc->fullscreen = settings->Fullscreen;
-	wfc->fullscreen_toggle = settings->ToggleFullscreen;
-	desktopWidth = settings->DesktopWidth;
-	desktopHeight = settings->DesktopHeight;
+	settings = context->settings;
+	if (!freerdp_settings_set_uint32(settings, FreeRDP_OsMajorType, OSMAJORTYPE_WINDOWS))
+		return FALSE;
+	if (!freerdp_settings_set_uint32(settings, FreeRDP_OsMinorType, OSMINORTYPE_WINDOWS_NT))
+		return FALSE;
+	wfc->fullscreen = freerdp_settings_get_bool(settings, FreeRDP_Fullscreen);
+	wfc->fullscreen_toggle = freerdp_settings_get_bool(settings, FreeRDP_ToggleFullscreen);
+	desktopWidth = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
+	desktopHeight = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
 
 	if (wfc->percentscreen > 0)
 	{
 		desktopWidth = (GetSystemMetrics(SM_CXSCREEN) * wfc->percentscreen) / 100;
-		settings->DesktopWidth = desktopWidth;
+		if (!freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, desktopWidth))
+			return FALSE;
 		desktopHeight = (GetSystemMetrics(SM_CYSCREEN) * wfc->percentscreen) / 100;
-		settings->DesktopHeight = desktopHeight;
+		if (!freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, desktopHeight))
+			return FALSE;
 	}
 
 	if (wfc->fullscreen)
 	{
-		if (settings->UseMultimon)
+		if (freerdp_settings_get_bool(settings, FreeRDP_UseMultimon))
 		{
 			desktopWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
 			desktopHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
@@ -253,57 +262,70 @@ static BOOL wf_pre_connect(freerdp* instance)
 	 *        otherwise the screen will crash when connecting to an XP desktop.*/
 	desktopWidth = (desktopWidth + 3) & (~3);
 
-	if (desktopWidth != settings->DesktopWidth)
+	if (desktopWidth != freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth))
 	{
-		freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, desktopWidth);
+		if (!freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, desktopWidth))
+			return FALSE;
 	}
 
-	if (desktopHeight != settings->DesktopHeight)
+	if (desktopHeight != freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight))
 	{
-		freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, desktopHeight);
+		if (!freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, desktopHeight))
+			return FALSE;
 	}
-
-	if (!freerdp_client_load_addins(context->channels, instance->settings))
-		return -1;
 
 	rc = freerdp_keyboard_init(freerdp_settings_get_uint32(settings, FreeRDP_KeyboardLayout));
-	freerdp_settings_set_uint32(settings, FreeRDP_KeyboardLayout, rc);
+	if (!freerdp_settings_set_uint32(settings, FreeRDP_KeyboardLayout, rc))
+		return FALSE;
 	PubSub_SubscribeChannelConnected(instance->context->pubSub, wf_OnChannelConnectedEventHandler);
 	PubSub_SubscribeChannelDisconnected(instance->context->pubSub,
 	                                    wf_OnChannelDisconnectedEventHandler);
 	return TRUE;
 }
 
+static void wf_append_item_to_system_menu(HMENU hMenu, UINT fMask, UINT wID, const wchar_t* text,
+                                          wfContext* wfc)
+{
+	MENUITEMINFO item_info = { 0 };
+	item_info.fMask = fMask;
+	item_info.cbSize = sizeof(MENUITEMINFO);
+	item_info.wID = wID;
+	item_info.fType = MFT_STRING;
+	item_info.dwTypeData = _wcsdup(text);
+	item_info.cch = (UINT)_wcslen(text);
+	if (wfc)
+		item_info.dwItemData = (ULONG_PTR)wfc;
+	InsertMenuItem(hMenu, wfc->systemMenuInsertPosition++, TRUE, &item_info);
+}
+
 static void wf_add_system_menu(wfContext* wfc)
 {
 	HMENU hMenu;
-	MENUITEMINFO item_info;
 
 	if (wfc->fullscreen && !wfc->fullscreen_toggle)
 	{
 		return;
 	}
 
-	if (wfc->context.settings->DynamicResolutionUpdate)
+	if (freerdp_settings_get_bool(wfc->common.context.settings, FreeRDP_DynamicResolutionUpdate))
 	{
 		return;
 	}
 
 	hMenu = GetSystemMenu(wfc->hwnd, FALSE);
-	ZeroMemory(&item_info, sizeof(MENUITEMINFO));
-	item_info.fMask = MIIM_CHECKMARKS | MIIM_FTYPE | MIIM_ID | MIIM_STRING | MIIM_DATA;
-	item_info.cbSize = sizeof(MENUITEMINFO);
-	item_info.wID = SYSCOMMAND_ID_SMARTSIZING;
-	item_info.fType = MFT_STRING;
-	item_info.dwTypeData = _wcsdup(_T("Smart sizing"));
-	item_info.cch = (UINT)_wcslen(_T("Smart sizing"));
-	item_info.dwItemData = (ULONG_PTR)wfc;
-	InsertMenuItem(hMenu, 6, TRUE, &item_info);
 
-	if (wfc->context.settings->SmartSizing)
+	wf_append_item_to_system_menu(hMenu,
+	                              MIIM_CHECKMARKS | MIIM_FTYPE | MIIM_ID | MIIM_STRING | MIIM_DATA,
+	                              SYSCOMMAND_ID_SMARTSIZING, L"Smart sizing", wfc);
+
+	if (freerdp_settings_get_bool(wfc->common.context.settings, FreeRDP_SmartSizing))
 	{
 		CheckMenuItem(hMenu, SYSCOMMAND_ID_SMARTSIZING, MF_CHECKED);
 	}
+
+	if (freerdp_settings_get_bool(wfc->common.context.settings, FreeRDP_RemoteAssistanceMode))
+		wf_append_item_to_system_menu(hMenu, MIIM_FTYPE | MIIM_ID | MIIM_STRING,
+		                              SYSCOMMAND_ID_REQUEST_CONTROL, L"Request control", wfc);
 }
 
 static WCHAR* wf_window_get_title(rdpSettings* settings)
@@ -311,21 +333,18 @@ static WCHAR* wf_window_get_title(rdpSettings* settings)
 	BOOL port;
 	WCHAR* windowTitle = NULL;
 	size_t size;
-	char* name;
 	WCHAR prefix[] = L"FreeRDP:";
 
 	if (!settings)
 		return NULL;
 
-	name = settings->ServerHostname;
+	const char* name = freerdp_settings_get_string(settings, FreeRDP_ServerHostname);
 
-	if (settings->WindowTitle)
-	{
-		ConvertToUnicode(CP_UTF8, 0, settings->WindowTitle, -1, &windowTitle, 0);
-		return windowTitle;
-	}
+	if (freerdp_settings_get_string(settings, FreeRDP_WindowTitle))
+		return ConvertUtf8ToWCharAlloc(freerdp_settings_get_string(settings, FreeRDP_WindowTitle),
+		                               NULL);
 
-	port = (settings->ServerPort != 3389);
+	port = (freerdp_settings_get_uint32(settings, FreeRDP_ServerPort) != 3389);
 	size = strlen(name) + 16 + wcslen(prefix);
 	windowTitle = calloc(size, sizeof(WCHAR));
 
@@ -335,7 +354,8 @@ static WCHAR* wf_window_get_title(rdpSettings* settings)
 	if (!port)
 		_snwprintf_s(windowTitle, size, _TRUNCATE, L"%s %S", prefix, name);
 	else
-		_snwprintf_s(windowTitle, size, _TRUNCATE, L"%s %S:%u", prefix, name, settings->ServerPort);
+		_snwprintf_s(windowTitle, size, _TRUNCATE, L"%s %S:%u", prefix, name,
+		             freerdp_settings_get_uint32(settings, FreeRDP_ServerPort));
 
 	return windowTitle;
 }
@@ -350,20 +370,33 @@ static BOOL wf_post_connect(freerdp* instance)
 	rdpSettings* settings;
 	EmbedWindowEventArgs e;
 	const UINT32 format = PIXEL_FORMAT_BGRX32;
-	settings = instance->settings;
+
+	WINPR_ASSERT(instance);
+
 	context = instance->context;
+	WINPR_ASSERT(context);
+
+	settings = context->settings;
+	WINPR_ASSERT(settings);
+
 	wfc = (wfContext*)instance->context;
-	cache = instance->context->cache;
-	wfc->primary = wf_image_new(wfc, settings->DesktopWidth, settings->DesktopHeight, format, NULL);
+	WINPR_ASSERT(wfc);
+
+	wfc->primary =
+	    wf_image_new(wfc, freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth),
+	                 freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight), format, NULL);
 
 	if (!gdi_init_ex(instance, format, 0, wfc->primary->pdata, NULL))
 		return FALSE;
 
+	cache = instance->context->cache;
+	WINPR_ASSERT(cache);
+
 	gdi = instance->context->gdi;
 
-	if (!settings->SoftwareGdi)
+	if (!freerdp_settings_get_bool(settings, FreeRDP_SoftwareGdi))
 	{
-		wf_gdi_register_update_callbacks(instance->update);
+		wf_gdi_register_update_callbacks(context->update);
 	}
 
 	wfc->window_title = wf_window_get_title(settings);
@@ -371,12 +404,15 @@ static BOOL wf_post_connect(freerdp* instance)
 	if (!wfc->window_title)
 		return FALSE;
 
-	if (settings->EmbeddedWindow)
-		settings->Decorations = FALSE;
+	if (freerdp_settings_get_bool(settings, FreeRDP_EmbeddedWindow))
+	{
+		if (!freerdp_settings_set_bool(settings, FreeRDP_Decorations, FALSE))
+			return FALSE;
+	}
 
 	if (wfc->fullscreen)
 		dwStyle = WS_POPUP;
-	else if (!settings->Decorations)
+	else if (!freerdp_settings_get_bool(settings, FreeRDP_Decorations))
 		dwStyle = WS_CHILD | WS_BORDER;
 	else
 		dwStyle =
@@ -391,8 +427,8 @@ static BOOL wf_post_connect(freerdp* instance)
 
 	wf_resize_window(wfc);
 	wf_add_system_menu(wfc);
-	BitBlt(wfc->primary->hdc, 0, 0, settings->DesktopWidth, settings->DesktopHeight, NULL, 0, 0,
-	       BLACKNESS);
+	BitBlt(wfc->primary->hdc, 0, 0, freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth),
+	       freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight), NULL, 0, 0, BLACKNESS);
 	wfc->drawing = wfc->primary;
 	EventArgsInit(&e, "wfreerdp");
 	e.embed = FALSE;
@@ -406,23 +442,13 @@ static BOOL wf_post_connect(freerdp* instance)
 	}
 #endif
 	UpdateWindow(wfc->hwnd);
-	instance->update->BeginPaint = wf_begin_paint;
-	instance->update->DesktopResize = wf_desktop_resize;
-	instance->update->EndPaint = wf_end_paint;
+	context->update->BeginPaint = wf_begin_paint;
+	context->update->DesktopResize = wf_desktop_resize;
+	context->update->EndPaint = wf_end_paint;
 	wf_register_pointer(context->graphics);
 
-	if (!settings->SoftwareGdi)
-	{
-		wf_register_graphics(context->graphics);
-		wf_gdi_register_update_callbacks(instance->update);
-		brush_cache_register_callbacks(instance->update);
-		glyph_cache_register_callbacks(instance->update);
-		bitmap_cache_register_callbacks(instance->update);
-		offscreen_cache_register_callbacks(instance->update);
-		palette_cache_register_callbacks(instance->update);
-	}
-
-	wfc->floatbar = wf_floatbar_new(wfc, wfc->hInstance, settings->Floatbar);
+	wfc->floatbar = wf_floatbar_new(wfc, wfc->hInstance,
+	                                freerdp_settings_get_uint32(settings, FreeRDP_Floatbar));
 	return TRUE;
 }
 
@@ -430,89 +456,136 @@ static void wf_post_disconnect(freerdp* instance)
 {
 	wfContext* wfc;
 
-	if (!instance || !instance->context || !instance->settings)
+	if (!instance || !instance->context)
 		return;
 
 	wfc = (wfContext*)instance->context;
 	free(wfc->window_title);
 }
 
-static CREDUI_INFOA wfUiInfo = { sizeof(CREDUI_INFOA), NULL, "Enter your credentials",
-	                             "Remote Desktop Security", NULL };
+static CREDUI_INFOW wfUiInfo = { sizeof(CREDUI_INFOW), NULL, L"Enter your credentials",
+	                             L"Remote Desktop Security", NULL };
 
-static BOOL wf_authenticate_raw(freerdp* instance, const char* title, char** username,
-                                char** password, char** domain)
+static BOOL wf_authenticate_ex(freerdp* instance, char** username, char** password, char** domain,
+                               rdp_auth_reason reason)
 {
 	wfContext* wfc;
 	BOOL fSave;
 	DWORD status;
 	DWORD dwFlags;
-	char UserName[CREDUI_MAX_USERNAME_LENGTH + 1] = { 0 };
-	char Password[CREDUI_MAX_PASSWORD_LENGTH + 1] = { 0 };
-	char User[CREDUI_MAX_USERNAME_LENGTH + 1] = { 0 };
-	char Domain[CREDUI_MAX_DOMAIN_TARGET_LENGTH + 1] = { 0 };
+	WCHAR UserNameW[CREDUI_MAX_USERNAME_LENGTH + 1] = { 0 };
+	WCHAR UserW[CREDUI_MAX_USERNAME_LENGTH + 1] = { 0 };
+	WCHAR DomainW[CREDUI_MAX_DOMAIN_TARGET_LENGTH + 1] = { 0 };
+	WCHAR PasswordW[CREDUI_MAX_PASSWORD_LENGTH + 1] = { 0 };
 
-	if (!instance || !instance->context)
-		return FALSE;
+	WINPR_ASSERT(instance);
+	WINPR_ASSERT(instance->context);
+	WINPR_ASSERT(instance->context->settings);
+
 	wfc = (wfContext*)instance->context;
+	WINPR_ASSERT(wfc);
+
+	WINPR_ASSERT(username);
+	WINPR_ASSERT(domain);
+	WINPR_ASSERT(password);
+
+	const WCHAR auth[] = L"Target credentials requested";
+	const WCHAR authPin[] = L"PIN requested";
+	const WCHAR gwAuth[] = L"Gateway credentials requested";
+	const WCHAR* titleW = auth;
 
 	fSave = FALSE;
-	dwFlags = CREDUI_FLAGS_DO_NOT_PERSIST | CREDUI_FLAGS_EXCLUDE_CERTIFICATES;
-
-	if (username && *username)
+	dwFlags = CREDUI_FLAGS_DO_NOT_PERSIST | CREDUI_FLAGS_EXCLUDE_CERTIFICATES |
+	          CREDUI_FLAGS_USERNAME_TARGET_CREDENTIALS;
+	switch (reason)
 	{
-		strncpy(UserName, *username, CREDUI_MAX_USERNAME_LENGTH);
-		strncpy(User, UserName, CREDUI_MAX_USERNAME_LENGTH);
+		case AUTH_NLA:
+			break;
+		case AUTH_TLS:
+		case AUTH_RDP:
+			if ((*username) && (*password))
+				return TRUE;
+			break;
+		case AUTH_SMARTCARD_PIN:
+			dwFlags &= ~CREDUI_FLAGS_USERNAME_TARGET_CREDENTIALS;
+			dwFlags |= CREDUI_FLAGS_PASSWORD_ONLY_OK | CREDUI_FLAGS_KEEP_USERNAME;
+			titleW = authPin;
+			if (*password)
+				return TRUE;
+			if (!(*username))
+				*username = _strdup("PIN");
+			break;
+		case GW_AUTH_HTTP:
+		case GW_AUTH_RDG:
+		case GW_AUTH_RPC:
+			titleW = gwAuth;
+			break;
+		default:
+			return FALSE;
 	}
 
-	if (password && *password)
+	if (*username)
 	{
-		strncpy(Password, *password, CREDUI_MAX_PASSWORD_LENGTH);
+		(void)ConvertUtf8ToWChar(*username, UserNameW, ARRAYSIZE(UserNameW));
+		(void)ConvertUtf8ToWChar(*username, UserW, ARRAYSIZE(UserW));
 	}
 
-	if (domain && *domain)
-	{
-		strncpy(Domain, *domain, CREDUI_MAX_DOMAIN_TARGET_LENGTH);
-	}
+	if (*password)
+		(void)ConvertUtf8ToWChar(*password, PasswordW, ARRAYSIZE(PasswordW));
 
-	if (!(username && *username && password && *password))
+	if (*domain)
+		(void)ConvertUtf8ToWChar(*domain, DomainW, ARRAYSIZE(DomainW));
+
+	if (_wcsnlen(PasswordW, ARRAYSIZE(PasswordW)) == 0)
 	{
-		if (!wfc->isConsole && wfc->context.settings->CredentialsFromStdin)
+		if (!wfc->isConsole &&
+		    freerdp_settings_get_bool(wfc->common.context.settings, FreeRDP_CredentialsFromStdin))
 			WLog_ERR(TAG, "Flag for stdin read present but stdin is redirected; using GUI");
-		if (wfc->isConsole && wfc->context.settings->CredentialsFromStdin)
-			status = CredUICmdLinePromptForCredentialsA(
-			    title, NULL, 0, UserName, CREDUI_MAX_USERNAME_LENGTH + 1, Password,
-			    CREDUI_MAX_PASSWORD_LENGTH + 1, &fSave, dwFlags);
+		if (wfc->isConsole &&
+		    freerdp_settings_get_bool(wfc->common.context.settings, FreeRDP_CredentialsFromStdin))
+			status = CredUICmdLinePromptForCredentialsW(titleW, NULL, 0, UserNameW,
+			                                            ARRAYSIZE(UserNameW), PasswordW,
+			                                            ARRAYSIZE(PasswordW), &fSave, dwFlags);
 		else
-			status = CredUIPromptForCredentialsA(&wfUiInfo, title, NULL, 0, UserName,
-			                                     CREDUI_MAX_USERNAME_LENGTH + 1, Password,
-			                                     CREDUI_MAX_PASSWORD_LENGTH + 1, &fSave, dwFlags);
-
+			status = CredUIPromptForCredentialsW(&wfUiInfo, titleW, NULL, 0, UserNameW,
+			                                     ARRAYSIZE(UserNameW), PasswordW,
+			                                     ARRAYSIZE(PasswordW), &fSave, dwFlags);
 		if (status != NO_ERROR)
 		{
 			WLog_ERR(TAG, "CredUIPromptForCredentials unexpected status: 0x%08lX", status);
 			return FALSE;
 		}
 
-		status = CredUIParseUserNameA(UserName, User, CREDUI_MAX_USERNAME_LENGTH, Domain,
-		                              CREDUI_MAX_DOMAIN_TARGET_LENGTH);
-		if (status != NO_ERROR)
+		if ((dwFlags & CREDUI_FLAGS_KEEP_USERNAME) == 0)
 		{
-			WLog_ERR(TAG, "Failed to parse UserName: %s into User: %s Domain: %s", UserName, User,
-			         Domain);
-			return FALSE;
+			status = CredUIParseUserNameW(UserNameW, UserW, ARRAYSIZE(UserW), DomainW,
+			                              ARRAYSIZE(DomainW));
+			if (status != NO_ERROR)
+			{
+				CHAR User[CREDUI_MAX_USERNAME_LENGTH + 1] = { 0 };
+				CHAR UserName[CREDUI_MAX_USERNAME_LENGTH + 1] = { 0 };
+				CHAR Domain[CREDUI_MAX_DOMAIN_TARGET_LENGTH + 1] = { 0 };
+
+				(void)ConvertWCharNToUtf8(UserNameW, ARRAYSIZE(UserNameW), UserName,
+				                          ARRAYSIZE(UserName));
+				(void)ConvertWCharNToUtf8(UserW, ARRAYSIZE(UserW), User, ARRAYSIZE(User));
+				(void)ConvertWCharNToUtf8(DomainW, ARRAYSIZE(DomainW), Domain, ARRAYSIZE(Domain));
+				WLog_ERR(TAG, "Failed to parse UserName: %s into User: %s Domain: %s", UserName,
+				         User, Domain);
+				return FALSE;
+			}
 		}
 	}
-	*username = _strdup(User);
 
+	*username = ConvertWCharNToUtf8Alloc(UserW, ARRAYSIZE(UserW), NULL);
 	if (!(*username))
 	{
-		WLog_ERR(TAG, "strdup failed", status);
+		WLog_ERR(TAG, "ConvertWCharNToUtf8Alloc failed", status);
 		return FALSE;
 	}
 
-	if (strlen(Domain) > 0)
-		*domain = _strdup(Domain);
+	if (_wcsnlen(DomainW, ARRAYSIZE(DomainW)) > 0)
+		*domain = ConvertWCharNToUtf8Alloc(DomainW, ARRAYSIZE(DomainW), NULL);
 	else
 		*domain = _strdup("\0");
 
@@ -523,8 +596,7 @@ static BOOL wf_authenticate_raw(freerdp* instance, const char* title, char** use
 		return FALSE;
 	}
 
-	*password = _strdup(Password);
-
+	*password = ConvertWCharNToUtf8Alloc(PasswordW, ARRAYSIZE(PasswordW), NULL);
 	if (!(*password))
 	{
 		free(*username);
@@ -535,33 +607,18 @@ static BOOL wf_authenticate_raw(freerdp* instance, const char* title, char** use
 	return TRUE;
 }
 
-static BOOL wf_authenticate(freerdp* instance, char** username, char** password, char** domain)
-{
-	return wf_authenticate_raw(instance, instance->settings->ServerHostname, username, password,
-	                           domain);
-}
-
-static BOOL wf_gw_authenticate(freerdp* instance, char** username, char** password, char** domain)
-{
-	char tmp[MAX_PATH];
-	sprintf_s(tmp, sizeof(tmp), "Gateway %s", instance->settings->GatewayHostname);
-	return wf_authenticate_raw(instance, tmp, username, password, domain);
-}
-
 static WCHAR* wf_format_text(const WCHAR* fmt, ...)
 {
 	int rc;
-	size_t size = 1024;
-	WCHAR* buffer = calloc(size, sizeof(WCHAR));
-	if (!buffer)
-		return NULL;
+	size_t size = 0;
+	WCHAR* buffer = NULL;
 
 	do
 	{
 		WCHAR* tmp;
 		va_list ap;
 		va_start(ap, fmt);
-		rc = vswprintf_s(buffer, size, fmt, ap);
+		rc = _vsnwprintf(buffer, size, fmt, ap);
 		va_end(ap);
 		if (rc <= 0)
 			goto fail;
@@ -628,14 +685,10 @@ static void wf_report_error(char* wszMessage, DWORD dwErrCode)
 static DWORD wf_is_x509_certificate_trusted(const char* common_name, const char* subject,
                                             const char* issuer, const char* fingerprint)
 {
-	size_t derPubKeyLen;
-	char* derPubKey;
-
 	HRESULT hr = CRYPT_E_NOT_FOUND;
 
 	DWORD dwChainFlags = CERT_CHAIN_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT;
 	PCCERT_CONTEXT pCert = NULL;
-	HCERTSTORE hStore = NULL;
 	HCERTCHAINENGINE hChainEngine = NULL;
 	PCCERT_CHAIN_CONTEXT pChainContext = NULL;
 
@@ -646,8 +699,8 @@ static DWORD wf_is_x509_certificate_trusted(const char* common_name, const char*
 	CERT_CHAIN_POLICY_STATUS PolicyStatus = { 0 };
 	CERT_CHAIN_ENGINE_CONFIG EngineConfig = { 0 };
 
-	derPubKeyLen = strlen(fingerprint);
-	derPubKey = calloc(derPubKeyLen, sizeof(char));
+	DWORD derPubKeyLen = strlen(fingerprint);
+	char* derPubKey = calloc(derPubKeyLen, sizeof(char));
 	if (NULL == derPubKey)
 	{
 		WLog_ERR(TAG, "Could not allocate derPubKey");
@@ -753,7 +806,8 @@ static DWORD wf_is_x509_certificate_trusted(const char* common_name, const char*
 		goto CleanUp;
 	}
 
-	WLog_INFO(TAG, "CertVerifyCertificateChainPolicy succeeded for %s (%s) issued by %s", common_name, subject, issuer);
+	WLog_INFO(TAG, "CertVerifyCertificateChainPolicy succeeded for %s (%s) issued by %s",
+	          common_name, subject, issuer);
 
 	hr = S_OK;
 CleanUp:
@@ -765,7 +819,7 @@ CleanUp:
 		wf_report_error(NULL, hr);
 	}
 
-  free(derPubKey);
+	free(derPubKey);
 
 	if (NULL != pChainContext)
 	{
@@ -946,75 +1000,37 @@ static BOOL wf_present_gateway_message(freerdp* instance, UINT32 type, BOOL isDi
 	return TRUE;
 }
 
-static DWORD WINAPI wf_input_thread(LPVOID arg)
-{
-	int status;
-	wMessage message;
-	wMessageQueue* queue;
-	freerdp* instance = (freerdp*)arg;
-	WINPR_ASSERT(NULL != instance);
-	status = 1;
-	queue = freerdp_get_message_queue(instance, FREERDP_INPUT_MESSAGE_QUEUE);
-
-	while (MessageQueue_Wait(queue))
-	{
-		while (MessageQueue_Peek(queue, &message, TRUE))
-		{
-			status = freerdp_message_queue_process_message(instance, FREERDP_INPUT_MESSAGE_QUEUE,
-			                                               &message);
-
-			if (!status)
-				break;
-		}
-
-		if (!status)
-			break;
-	}
-
-	ExitThread(0);
-	return 0;
-}
-
 static DWORD WINAPI wf_client_thread(LPVOID lpParam)
 {
-	MSG msg;
-	int width;
-	int height;
-	BOOL msg_ret;
-	int quit_msg;
-	DWORD nCount;
-	DWORD error;
-	HANDLE handles[64];
-	wfContext* wfc;
-	freerdp* instance;
-	rdpContext* context;
-	rdpChannels* channels;
-	rdpSettings* settings;
-	BOOL async_input;
-	HANDLE input_thread;
-	instance = (freerdp*)lpParam;
-	context = instance->context;
-	wfc = (wfContext*)instance->context;
+	MSG msg = { 0 };
+	int width = 0;
+	int height = 0;
+	BOOL msg_ret = FALSE;
+	int quit_msg = 0;
+	DWORD error = 0;
+
+	freerdp* instance = (freerdp*)lpParam;
+	WINPR_ASSERT(instance);
 
 	if (!freerdp_connect(instance))
 		goto end;
 
-	channels = instance->context->channels;
-	settings = instance->context->settings;
-	async_input = settings->AsyncInput;
+	rdpContext* context = instance->context;
+	WINPR_ASSERT(context);
 
-	if (async_input)
-	{
-		if (!(input_thread = CreateThread(NULL, 0, wf_input_thread, instance, 0, NULL)))
-		{
-			WLog_ERR(TAG, "Failed to create async input thread.");
-			goto disconnect;
-		}
-	}
+	wfContext* wfc = (wfContext*)instance->context;
+	WINPR_ASSERT(wfc);
 
-	while (1)
+	rdpChannels* channels = context->channels;
+	WINPR_ASSERT(channels);
+
+	rdpSettings* settings = context->settings;
+	WINPR_ASSERT(settings);
+
+	while (!freerdp_shall_disconnect_context(instance->context))
 	{
-		nCount = 0;
+		HANDLE handles[MAXIMUM_WAIT_OBJECTS] = { 0 };
+		DWORD nCount = 0;
 
 		if (freerdp_focus_required(instance))
 		{
@@ -1034,7 +1050,9 @@ static DWORD WINAPI wf_client_thread(LPVOID lpParam)
 			nCount += tmp;
 		}
 
-		if (MsgWaitForMultipleObjects(nCount, handles, FALSE, 1000, QS_ALLINPUT) == WAIT_FAILED)
+		DWORD status = MsgWaitForMultipleObjectsEx(nCount, handles, 5 * 1000, QS_ALLINPUT,
+		                                           MWMO_ALERTABLE | MWMO_INPUTAVAILABLE);
+		if (status == WAIT_FAILED)
 		{
 			WLog_ERR(TAG, "wfreerdp_run: WaitForMultipleObjects failed: 0x%08lX", GetLastError());
 			break;
@@ -1047,12 +1065,11 @@ static DWORD WINAPI wf_client_thread(LPVOID lpParam)
 					continue;
 
 				WLog_ERR(TAG, "Failed to check FreeRDP file descriptor");
-				fflush(stdout);
 				break;
 			}
 		}
 
-		if (freerdp_shall_disconnect(instance))
+		if (freerdp_shall_disconnect_context(instance->context))
 			break;
 
 		quit_msg = FALSE;
@@ -1061,7 +1078,7 @@ static DWORD WINAPI wf_client_thread(LPVOID lpParam)
 		{
 			msg_ret = GetMessage(&msg, NULL, 0, 0);
 
-			if (instance->settings->EmbeddedWindow)
+			if (freerdp_settings_get_bool(settings, FreeRDP_EmbeddedWindow))
 			{
 				if ((msg.message == WM_SETFOCUS) && (msg.lParam == 1))
 				{
@@ -1073,11 +1090,22 @@ static DWORD WINAPI wf_client_thread(LPVOID lpParam)
 				}
 			}
 
-			if (msg.message == WM_SIZE)
+			switch (msg.message)
 			{
-				width = LOWORD(msg.lParam);
-				height = HIWORD(msg.lParam);
-				SetWindowPos(wfc->hwnd, HWND_TOP, 0, 0, width, height, SWP_FRAMECHANGED);
+				case WM_SIZE:
+				{
+					width = LOWORD(msg.lParam);
+					height = HIWORD(msg.lParam);
+					SetWindowPos(wfc->hwnd, HWND_TOP, 0, 0, width, height, SWP_FRAMECHANGED);
+					break;
+				}
+				case WM_FREERDP_SHOWWINDOW:
+				{
+					ShowWindow(wfc->hwnd, SW_NORMAL);
+					break;
+				}
+				default:
+					break;
 			}
 
 			if ((msg_ret == 0) || (msg_ret == -1))
@@ -1095,20 +1123,7 @@ static DWORD WINAPI wf_client_thread(LPVOID lpParam)
 	}
 
 	/* cleanup */
-	if (async_input)
-	{
-		wMessageQueue* input_queue;
-		input_queue = freerdp_get_message_queue(instance, FREERDP_INPUT_MESSAGE_QUEUE);
-
-		if (MessageQueue_PostQuit(input_queue, 0))
-			WaitForSingleObject(input_thread, INFINITE);
-	}
-
-disconnect:
 	freerdp_disconnect(instance);
-
-	if (async_input)
-		CloseHandle(input_thread);
 
 end:
 	error = freerdp_get_last_error(instance->context);
@@ -1170,13 +1185,20 @@ int freerdp_client_set_window_size(wfContext* wfc, int width, int height)
 
 void wf_size_scrollbars(wfContext* wfc, UINT32 client_width, UINT32 client_height)
 {
+	const rdpSettings* settings;
+	WINPR_ASSERT(wfc);
+
+	settings = wfc->common.context.settings;
+	WINPR_ASSERT(settings);
+
 	if (wfc->disablewindowtracking)
 		return;
 
 	// prevent infinite message loop
 	wfc->disablewindowtracking = TRUE;
 
-	if (wfc->context.settings->SmartSizing || wfc->context.settings->DynamicResolutionUpdate)
+	if (freerdp_settings_get_bool(settings, FreeRDP_SmartSizing) ||
+	    freerdp_settings_get_bool(settings, FreeRDP_DynamicResolutionUpdate))
 	{
 		wfc->xCurrentScroll = 0;
 		wfc->yCurrentScroll = 0;
@@ -1196,24 +1218,26 @@ void wf_size_scrollbars(wfContext* wfc, UINT32 client_width, UINT32 client_heigh
 		BOOL horiz = wfc->xScrollVisible;
 		BOOL vert = wfc->yScrollVisible;
 
-		if (!horiz && client_width < wfc->context.settings->DesktopWidth)
+		if (!horiz && client_width < freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth))
 		{
 			horiz = TRUE;
 		}
 		else if (horiz &&
 		         client_width >=
-		             wfc->context.settings->DesktopWidth /* - GetSystemMetrics(SM_CXVSCROLL)*/)
+		             freerdp_settings_get_uint32(
+		                 settings, FreeRDP_DesktopWidth) /* - GetSystemMetrics(SM_CXVSCROLL)*/)
 		{
 			horiz = FALSE;
 		}
 
-		if (!vert && client_height < wfc->context.settings->DesktopHeight)
+		if (!vert && client_height < freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight))
 		{
 			vert = TRUE;
 		}
 		else if (vert &&
 		         client_height >=
-		             wfc->context.settings->DesktopHeight /* - GetSystemMetrics(SM_CYHSCROLL)*/)
+		             freerdp_settings_get_uint32(
+		                 settings, FreeRDP_DesktopHeight) /* - GetSystemMetrics(SM_CYHSCROLL)*/)
 		{
 			vert = FALSE;
 		}
@@ -1248,12 +1272,13 @@ void wf_size_scrollbars(wfContext* wfc, UINT32 client_width, UINT32 client_heigh
 			// The horizontal scrolling range is defined by
 			// (bitmap_width) - (client_width). The current horizontal
 			// scroll value remains within the horizontal scrolling range.
-			wfc->xMaxScroll = MAX(wfc->context.settings->DesktopWidth - client_width, 0);
+			wfc->xMaxScroll =
+			    MAX(freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth) - client_width, 0);
 			wfc->xCurrentScroll = MIN(wfc->xCurrentScroll, wfc->xMaxScroll);
 			si.cbSize = sizeof(si);
 			si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
 			si.nMin = wfc->xMinScroll;
-			si.nMax = wfc->context.settings->DesktopWidth;
+			si.nMax = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
 			si.nPage = client_width;
 			si.nPos = wfc->xCurrentScroll;
 			SetScrollInfo(wfc->hwnd, SB_HORZ, &si, TRUE);
@@ -1264,12 +1289,13 @@ void wf_size_scrollbars(wfContext* wfc, UINT32 client_width, UINT32 client_heigh
 			// The vertical scrolling range is defined by
 			// (bitmap_height) - (client_height). The current vertical
 			// scroll value remains within the vertical scrolling range.
-			wfc->yMaxScroll = MAX(wfc->context.settings->DesktopHeight - client_height, 0);
+			wfc->yMaxScroll = MAX(
+			    freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight) - client_height, 0);
 			wfc->yCurrentScroll = MIN(wfc->yCurrentScroll, wfc->yMaxScroll);
 			si.cbSize = sizeof(si);
 			si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
 			si.nMin = wfc->yMinScroll;
-			si.nMax = wfc->context.settings->DesktopHeight;
+			si.nMax = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
 			si.nPage = client_height;
 			si.nPos = wfc->yCurrentScroll;
 			SetScrollInfo(wfc->hwnd, SB_VERT, &si, TRUE);
@@ -1309,29 +1335,24 @@ static BOOL wfreerdp_client_new(freerdp* instance, rdpContext* context)
 	if (!(wfreerdp_client_global_init()))
 		return FALSE;
 
+	WINPR_ASSERT(instance);
 	instance->PreConnect = wf_pre_connect;
 	instance->PostConnect = wf_post_connect;
 	instance->PostDisconnect = wf_post_disconnect;
-	instance->Authenticate = wf_authenticate;
-	instance->GatewayAuthenticate = wf_gw_authenticate;
+	instance->AuthenticateEx = wf_authenticate_ex;
 
 #ifdef WITH_WINDOWS_CERT_STORE
-	freerdp_settings_set_bool(instance->settings, FreeRDP_CertificateCallbackPreferPEM, TRUE);
+	if (!freerdp_settings_set_bool(context->settings, FreeRDP_CertificateCallbackPreferPEM, TRUE))
+		return FALSE;
 #endif
 
-	if (wfc->isConsole)
-	{
-		instance->VerifyCertificateEx = wf_cli_verify_certificate_ex;
-		instance->VerifyChangedCertificateEx = client_cli_verify_changed_certificate_ex;
-		instance->PresentGatewayMessage = client_cli_present_gateway_message;
-	}
-	else
+	if (!wfc->isConsole)
 	{
 		instance->VerifyCertificateEx = wf_verify_certificate_ex;
 		instance->VerifyChangedCertificateEx = wf_verify_changed_certificate_ex;
 		instance->PresentGatewayMessage = wf_present_gateway_message;
 	}
-	
+
 #ifdef WITH_PROGRESS_BAR
 	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 	CoCreateInstance(&CLSID_TaskbarList, NULL, CLSCTX_ALL, &IID_ITaskbarList3,
@@ -1354,14 +1375,52 @@ static void wfreerdp_client_free(freerdp* instance, rdpContext* context)
 
 static int wfreerdp_client_start(rdpContext* context)
 {
-	HWND hWndParent;
-	HINSTANCE hInstance;
 	wfContext* wfc = (wfContext*)context;
+
+	WINPR_ASSERT(context);
+	WINPR_ASSERT(context->settings);
+
 	freerdp* instance = context->instance;
-	hInstance = GetModuleHandle(NULL);
-	hWndParent = (HWND)instance->settings->ParentWindowId;
-	instance->settings->EmbeddedWindow = (hWndParent) ? TRUE : FALSE;
+	WINPR_ASSERT(instance);
+
+	rdpSettings* settings = context->settings;
+	WINPR_ASSERT(settings);
+
+	HINSTANCE hInstance = GetModuleHandle(NULL);
+	HWND hWndParent = (HWND)freerdp_settings_get_uint64(settings, FreeRDP_ParentWindowId);
+	if (!freerdp_settings_set_bool(settings, FreeRDP_EmbeddedWindow, (hWndParent) ? TRUE : FALSE))
+		return -1;
+
 	wfc->hWndParent = hWndParent;
+
+	if (freerdp_settings_get_bool(settings, FreeRDP_EmbeddedWindow))
+	{
+		typedef UINT(WINAPI * GetDpiForWindow_t)(HWND hwnd);
+		typedef BOOL(WINAPI * SetProcessDPIAware_t)(void);
+
+		HMODULE module = GetModuleHandle(_T("User32"));
+		if (module)
+		{
+			GetDpiForWindow_t pGetDpiForWindow =
+			    GetProcAddressAs(module, "GetDpiForWindow", GetDpiForWindow_t);
+			SetProcessDPIAware_t pSetProcessDPIAware =
+			    GetProcAddressAs(module, "SetProcessDPIAware", SetProcessDPIAware_t);
+			if (pGetDpiForWindow && pSetProcessDPIAware)
+			{
+				const UINT dpiAwareness = pGetDpiForWindow(hWndParent);
+				if (dpiAwareness != USER_DEFAULT_SCREEN_DPI)
+					pSetProcessDPIAware();
+			}
+			FreeLibrary(module);
+		}
+	}
+
+	/* initial windows system item position where we will insert new menu item
+	 * after default 5 items (restore, move, size, minimize, maximize)
+	 * gets incremented each time wf_append_item_to_system_menu is called
+	 * or maybe could use GetMenuItemCount() to get initial item count ? */
+	wfc->systemMenuInsertPosition = 6;
+
 	wfc->hInstance = hInstance;
 	wfc->cursor = LoadCursor(NULL, IDC_ARROW);
 	wfc->icon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_ICON1));
@@ -1371,7 +1430,7 @@ static int wfreerdp_client_start(rdpContext* context)
 	wfc->wndClass.lpfnWndProc = wf_event_proc;
 	wfc->wndClass.cbClsExtra = 0;
 	wfc->wndClass.cbWndExtra = 0;
-	wfc->wndClass.hCursor = wfc->cursor;
+	wfc->wndClass.hCursor = NULL;
 	wfc->wndClass.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
 	wfc->wndClass.lpszMenuName = NULL;
 	wfc->wndClass.lpszClassName = wfc->wndClassName;
@@ -1385,9 +1444,10 @@ static int wfreerdp_client_start(rdpContext* context)
 	if (!wfc->keyboardThread)
 		return -1;
 
-	wfc->thread = CreateThread(NULL, 0, wf_client_thread, (void*)instance, 0, &wfc->mainThreadId);
+	wfc->common.thread =
+	    CreateThread(NULL, 0, wf_client_thread, (void*)instance, 0, &wfc->mainThreadId);
 
-	if (!wfc->thread)
+	if (!wfc->common.thread)
 		return -1;
 
 	return 0;
@@ -1395,22 +1455,19 @@ static int wfreerdp_client_start(rdpContext* context)
 
 static int wfreerdp_client_stop(rdpContext* context)
 {
+	int rc;
 	wfContext* wfc = (wfContext*)context;
 
-	if (wfc->thread)
-	{
-		PostThreadMessage(wfc->mainThreadId, WM_QUIT, 0, 0);
-		WaitForSingleObject(wfc->thread, INFINITE);
-		CloseHandle(wfc->thread);
-		wfc->thread = NULL;
-		wfc->mainThreadId = 0;
-	}
+	WINPR_ASSERT(wfc);
+	PostThreadMessage(wfc->mainThreadId, WM_QUIT, 0, 0);
+	rc = freerdp_client_common_stop(context);
+	wfc->mainThreadId = 0;
 
 	if (wfc->keyboardThread)
 	{
 		PostThreadMessage(wfc->keyboardThreadId, WM_QUIT, 0, 0);
-		WaitForSingleObject(wfc->keyboardThread, INFINITE);
-		CloseHandle(wfc->keyboardThread);
+		(void)WaitForSingleObject(wfc->keyboardThread, INFINITE);
+		(void)CloseHandle(wfc->keyboardThread);
 		wfc->keyboardThread = NULL;
 		wfc->keyboardThreadId = 0;
 	}

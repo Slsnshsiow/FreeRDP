@@ -30,11 +30,11 @@
 
 #include <freerdp/freerdp.h>
 
-typedef struct _TSMF_PRESENTATION TSMF_PRESENTATION;
+typedef struct S_TSMF_PRESENTATION TSMF_PRESENTATION;
 
-typedef struct _TSMF_STREAM TSMF_STREAM;
+typedef struct S_TSMF_STREAM TSMF_STREAM;
 
-typedef struct _TSMF_SAMPLE TSMF_SAMPLE;
+typedef struct S_TSMF_SAMPLE TSMF_SAMPLE;
 
 TSMF_PRESENTATION* tsmf_presentation_new(const BYTE* guid,
                                          IWTSVirtualChannelCallback* pChannelCallback);
@@ -47,8 +47,8 @@ BOOL tsmf_presentation_restarted(TSMF_PRESENTATION* presentation);
 BOOL tsmf_presentation_volume_changed(TSMF_PRESENTATION* presentation, UINT32 newVolume,
                                       UINT32 muted);
 BOOL tsmf_presentation_set_geometry_info(TSMF_PRESENTATION* presentation, UINT32 x, UINT32 y,
-                                         UINT32 width, UINT32 height, int num_rects,
-                                         RDP_RECT* rects);
+                                         UINT32 width, UINT32 height, UINT32 num_rects,
+                                         const RECTANGLE_32* rects);
 void tsmf_presentation_set_audio_device(TSMF_PRESENTATION* presentation, const char* name,
                                         const char* device);
 void tsmf_presentation_free(TSMF_PRESENTATION* presentation);
