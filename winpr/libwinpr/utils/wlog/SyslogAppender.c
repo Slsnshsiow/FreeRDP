@@ -18,18 +18,15 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include "SyslogAppender.h"
 #include <syslog.h>
 
-struct _wLogSyslogAppender
+typedef struct
 {
 	WLOG_APPENDER_COMMON();
-};
-typedef struct _wLogSyslogAppender wLogSyslogAppender;
+} wLogSyslogAppender;
 
 static int getSyslogLevel(DWORD level)
 {
@@ -71,7 +68,7 @@ static BOOL WLog_SyslogAppender_Close(wLog* log, wLogAppender* appender)
 static BOOL WLog_SyslogAppender_WriteMessage(wLog* log, wLogAppender* appender,
                                              wLogMessage* message)
 {
-	int syslogLevel;
+	int syslogLevel = 0;
 
 	if (!log || !appender || !message)
 		return FALSE;
@@ -86,7 +83,7 @@ static BOOL WLog_SyslogAppender_WriteMessage(wLog* log, wLogAppender* appender,
 static BOOL WLog_SyslogAppender_WriteDataMessage(wLog* log, wLogAppender* appender,
                                                  wLogMessage* message)
 {
-	int syslogLevel;
+	int syslogLevel = 0;
 
 	if (!log || !appender || !message)
 		return FALSE;
@@ -101,7 +98,7 @@ static BOOL WLog_SyslogAppender_WriteDataMessage(wLog* log, wLogAppender* append
 static BOOL WLog_SyslogAppender_WriteImageMessage(wLog* log, wLogAppender* appender,
                                                   wLogMessage* message)
 {
-	int syslogLevel;
+	int syslogLevel = 0;
 
 	if (!log || !appender || !message)
 		return FALSE;
@@ -119,9 +116,9 @@ static void WLog_SyslogAppender_Free(wLogAppender* appender)
 	free(appender);
 }
 
-wLogAppender* WLog_SyslogAppender_New(wLog* log)
+wLogAppender* WLog_SyslogAppender_New(WINPR_ATTR_UNUSED wLog* log)
 {
-	wLogSyslogAppender* appender;
+	wLogSyslogAppender* appender = NULL;
 
 	appender = (wLogSyslogAppender*)calloc(1, sizeof(wLogSyslogAppender));
 	if (!appender)

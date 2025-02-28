@@ -22,9 +22,9 @@
 
 #include "tsmf_types.h"
 
-typedef struct _ITSMFAudioDevice ITSMFAudioDevice;
+typedef struct s_ITSMFAudioDevice ITSMFAudioDevice;
 
-struct _ITSMFAudioDevice
+struct s_ITSMFAudioDevice
 {
 	/* Open the audio device. */
 	BOOL (*Open)(ITSMFAudioDevice* audio, const char* device);
@@ -44,7 +44,7 @@ struct _ITSMFAudioDevice
 };
 
 #define TSMF_AUDIO_DEVICE_EXPORT_FUNC_NAME "TSMFAudioDeviceEntry"
-typedef ITSMFAudioDevice* (*TSMF_AUDIO_DEVICE_ENTRY)(void);
+typedef UINT(VCAPITYPE* TSMF_AUDIO_DEVICE_ENTRY)(ITSMFAudioDevice** dev);
 
 ITSMFAudioDevice* tsmf_load_audio_device(const char* name, const char* device);
 

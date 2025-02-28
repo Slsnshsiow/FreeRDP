@@ -22,9 +22,7 @@
 #ifndef FREERDP_CLIENT_X11_FREERDP_H
 #define FREERDP_CLIENT_X11_FREERDP_H
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 typedef struct xf_context xfContext;
 
@@ -55,6 +53,7 @@ typedef struct xf_context xfContext;
 #include <freerdp/codec/h264.h>
 #include <freerdp/codec/progressive.h>
 #include <freerdp/codec/region.h>
+#include <freerdp/locale/keyboard.h>
 
 #if !defined(XcursorUInt)
 typedef unsigned int XcursorUInt;
@@ -66,17 +65,17 @@ typedef XcursorUInt XcursorPixel;
 
 struct xf_FullscreenMonitors
 {
-	UINT32 top;
-	UINT32 bottom;
-	UINT32 left;
-	UINT32 right;
+	INT32 top;
+	INT32 bottom;
+	INT32 left;
+	INT32 right;
 };
 typedef struct xf_FullscreenMonitors xfFullscreenMonitors;
 
 struct xf_WorkArea
 {
-	UINT32 x;
-	UINT32 y;
+	INT32 x;
+	INT32 y;
 	UINT32 width;
 	UINT32 height;
 };
@@ -111,8 +110,8 @@ struct xf_glyph
 typedef struct xf_glyph xfGlyph;
 
 typedef struct xf_clipboard xfClipboard;
-typedef struct _xfDispContext xfDispContext;
-typedef struct _xfVideoContext xfVideoContext;
+typedef struct s_xfDispContext xfDispContext;
+typedef struct s_xfVideoContext xfVideoContext;
 typedef struct xf_rail_icon_cache xfRailIconCache;
 
 /* Number of buttons that are mapped from X11 to RDP button events. */
@@ -120,7 +119,7 @@ typedef struct xf_rail_icon_cache xfRailIconCache;
 
 typedef struct
 {
-	int button;
+	UINT32 button;
 	UINT16 flags;
 } button_map;
 
@@ -137,12 +136,12 @@ typedef struct touch_contact
 	double last_y;
 
 } touchContact;
+
 #endif
 
 struct xf_context
 {
-	rdpContext context;
-	DEFINE_RDP_CLIENT_COMMON();
+	rdpClientContext common;
 
 	GC gc;
 	int xfds;
@@ -179,15 +178,10 @@ struct xf_context
 	BOOL UseXThreads;
 	BOOL cursorHidden;
 
-	HGDI_DC hdc;
 	UINT32 bitmap_size;
 	BYTE* bitmap_buffer;
 
 	BOOL frame_begin;
-	UINT16 frame_x1;
-	UINT16 frame_y1;
-	UINT16 frame_x2;
-	UINT16 frame_y2;
 
 	int XInputOpcode;
 
@@ -204,10 +198,8 @@ struct xf_context
 #endif
 
 	BOOL focused;
-	BOOL use_xinput;
 	BOOL mouse_active;
 	BOOL fullscreen_toggle;
-	BOOL controlToggle;
 	UINT32 KeyboardLayout;
 	BOOL KeyboardState[256];
 	XModifierKeymap* modifierMap;
@@ -215,6 +207,7 @@ struct xf_context
 	wArrayList* xevents;
 	BOOL actionScriptExists;
 
+	int attribs_mask;
 	XSetWindowAttributes attribs;
 	BOOL complex_regions;
 	VIRTUAL_SCREEN vscreen;
@@ -231,18 +224,26 @@ struct xf_context
 
 	Atom _NET_WM_ICON;
 	Atom _MOTIF_WM_HINTS;
+	Atom _NET_NUMBER_OF_DESKTOPS;
 	Atom _NET_CURRENT_DESKTOP;
 	Atom _NET_WORKAREA;
 
 	Atom _NET_SUPPORTED;
-	ATOM _NET_SUPPORTING_WM_CHECK;
+	Atom _NET_SUPPORTING_WM_CHECK;
 
 	Atom _NET_WM_STATE;
-	Atom _NET_WM_STATE_FULLSCREEN;
-	Atom _NET_WM_STATE_MAXIMIZED_HORZ;
+	Atom _NET_WM_STATE_MODAL;
+	Atom _NET_WM_STATE_STICKY;
 	Atom _NET_WM_STATE_MAXIMIZED_VERT;
+	Atom _NET_WM_STATE_MAXIMIZED_HORZ;
+	Atom _NET_WM_STATE_SHADED;
 	Atom _NET_WM_STATE_SKIP_TASKBAR;
 	Atom _NET_WM_STATE_SKIP_PAGER;
+	Atom _NET_WM_STATE_HIDDEN;
+	Atom _NET_WM_STATE_FULLSCREEN;
+	Atom _NET_WM_STATE_ABOVE;
+	Atom _NET_WM_STATE_BELOW;
+	Atom _NET_WM_STATE_DEMANDS_ATTENTION;
 
 	Atom _NET_WM_FULLSCREEN_MONITORS;
 
@@ -264,6 +265,18 @@ struct xf_context
 	Atom WM_PROTOCOLS;
 	Atom WM_DELETE_WINDOW;
 
+	/* Allow actions */
+	Atom NET_WM_ALLOWED_ACTIONS;
+
+	Atom NET_WM_ACTION_CLOSE;
+	Atom NET_WM_ACTION_MINIMIZE;
+	Atom NET_WM_ACTION_MOVE;
+	Atom NET_WM_ACTION_RESIZE;
+	Atom NET_WM_ACTION_MAXIMIZE_HORZ;
+	Atom NET_WM_ACTION_MAXIMIZE_VERT;
+	Atom NET_WM_ACTION_FULLSCREEN;
+	Atom NET_WM_ACTION_CHANGE_DESKTOP;
+
 	/* Channels */
 #if defined(CHANNEL_TSMF_CLIENT)
 	TsmfClientContext* tsmf;
@@ -272,8 +285,6 @@ struct xf_context
 	xfClipboard* clipboard;
 	CliprdrClientContext* cliprdr;
 	xfVideoContext* xfVideo;
-	RdpeiClientContext* rdpei;
-	EncomspClientContext* encomsp;
 	xfDispContext* xfDisp;
 
 	RailClientContext* rail;
@@ -287,7 +298,7 @@ struct xf_context
 	button_map button_map[NUM_BUTTONS_MAPPED];
 	BYTE savedMaximizedState;
 	UINT32 locked;
-	BOOL firstPressRightCtrl;
+	BOOL wasRightCtrlAlreadyPressed;
 	BOOL ungrabKeyboardWithRightCtrl;
 
 #if defined(WITH_XI)
@@ -301,14 +312,17 @@ struct xf_context
 	double px_vector;
 	double py_vector;
 #endif
+	BOOL xi_rawevent;
+	BOOL xi_event;
+	HANDLE pipethread;
+	wLog* log;
+	FREERDP_REMAP_TABLE* remap_table;
 };
 
 BOOL xf_create_window(xfContext* xfc);
+BOOL xf_create_image(xfContext* xfc);
 void xf_toggle_fullscreen(xfContext* xfc);
-BOOL xf_toggle_control(xfContext* xfc);
-
-void xf_encomsp_init(xfContext* xfc, EncomspClientContext* encomsp);
-void xf_encomsp_uninit(xfContext* xfc, EncomspClientContext* encomsp);
+void xf_minimize(xfContext* xfc);
 
 enum XF_EXIT_CODE
 {
@@ -361,7 +375,7 @@ enum XF_EXIT_CODE
 	XF_EXIT_TLS_CONNECT_FAILED = 143,
 	XF_EXIT_INSUFFICIENT_PRIVILEGES = 144,
 	XF_EXIT_CONNECT_CANCELLED = 145,
-	XF_EXIT_SECURITY_NEGO_CONNECT_FAILED = 146,
+
 	XF_EXIT_CONNECT_TRANSPORT_FAILED = 147,
 	XF_EXIT_CONNECT_PASSWORD_EXPIRED = 148,
 	XF_EXIT_CONNECT_PASSWORD_MUST_CHANGE = 149,
@@ -379,8 +393,8 @@ enum XF_EXIT_CODE
 	XF_EXIT_UNKNOWN = 255,
 };
 
-#define xf_lock_x11(xfc) xf_lock_x11_(xfc, __FUNCTION__)
-#define xf_unlock_x11(xfc) xf_unlock_x11_(xfc, __FUNCTION__)
+#define xf_lock_x11(xfc) xf_lock_x11_(xfc, __func__)
+#define xf_unlock_x11(xfc) xf_unlock_x11_(xfc, __func__)
 
 void xf_lock_x11_(xfContext* xfc, const char* fkt);
 void xf_unlock_x11_(xfContext* xfc, const char* fkt);
@@ -388,10 +402,12 @@ void xf_unlock_x11_(xfContext* xfc, const char* fkt);
 BOOL xf_picture_transform_required(xfContext* xfc);
 
 #define xf_draw_screen(_xfc, _x, _y, _w, _h) \
-	xf_draw_screen_((_xfc), (_x), (_y), (_w), (_h), __FUNCTION__, __FILE__, __LINE__)
+	xf_draw_screen_((_xfc), (_x), (_y), (_w), (_h), __func__, __FILE__, __LINE__)
 void xf_draw_screen_(xfContext* xfc, int x, int y, int w, int h, const char* fkt, const char* file,
                      int line);
 
-FREERDP_API DWORD xf_exit_code_from_disconnect_reason(DWORD reason);
+BOOL xf_keyboard_update_modifier_map(xfContext* xfc);
+
+int xf_exit_code_from_disconnect_reason(DWORD reason);
 
 #endif /* FREERDP_CLIENT_X11_FREERDP_H */

@@ -19,6 +19,7 @@
  */
 
 #include <winpr/sysinfo.h>
+#include <winpr/cast.h>
 
 #include "wlf_disp.h"
 
@@ -26,7 +27,7 @@
 
 #define RESIZE_MIN_DELAY 200 /* minimum delay in ms between two resizes */
 
-struct _wlfDispContext
+struct s_wlfDispContext
 {
 	wlfContext* wlc;
 	DispClientContext* disp;
@@ -43,11 +44,18 @@ struct _wlfDispContext
 	UINT32 lastSentDeviceScaleFactor;
 };
 
-static UINT wlf_disp_sendLayout(DispClientContext* disp, rdpMonitor* monitors, size_t nmonitors);
+static UINT wlf_disp_sendLayout(DispClientContext* disp, const rdpMonitor* monitors,
+                                size_t nmonitors);
 
 static BOOL wlf_disp_settings_changed(wlfDispContext* wlfDisp)
 {
-	rdpSettings* settings = wlfDisp->wlc->context.settings;
+	rdpSettings* settings = NULL;
+
+	WINPR_ASSERT(wlfDisp);
+	WINPR_ASSERT(wlfDisp->wlc);
+
+	settings = wlfDisp->wlc->common.context.settings;
+	WINPR_ASSERT(settings);
 
 	if (wlfDisp->lastSentWidth != wlfDisp->targetWidth)
 		return TRUE;
@@ -55,13 +63,16 @@ static BOOL wlf_disp_settings_changed(wlfDispContext* wlfDisp)
 	if (wlfDisp->lastSentHeight != wlfDisp->targetHeight)
 		return TRUE;
 
-	if (wlfDisp->lastSentDesktopOrientation != settings->DesktopOrientation)
+	if (wlfDisp->lastSentDesktopOrientation !=
+	    freerdp_settings_get_uint16(settings, FreeRDP_DesktopOrientation))
 		return TRUE;
 
-	if (wlfDisp->lastSentDesktopScaleFactor != settings->DesktopScaleFactor)
+	if (wlfDisp->lastSentDesktopScaleFactor !=
+	    freerdp_settings_get_uint32(settings, FreeRDP_DesktopScaleFactor))
 		return TRUE;
 
-	if (wlfDisp->lastSentDeviceScaleFactor != settings->DeviceScaleFactor)
+	if (wlfDisp->lastSentDeviceScaleFactor !=
+	    freerdp_settings_get_uint32(settings, FreeRDP_DeviceScaleFactor))
 		return TRUE;
 
 	if (wlfDisp->fullscreen != wlfDisp->wlc->fullscreen)
@@ -72,12 +83,22 @@ static BOOL wlf_disp_settings_changed(wlfDispContext* wlfDisp)
 
 static BOOL wlf_update_last_sent(wlfDispContext* wlfDisp)
 {
-	rdpSettings* settings = wlfDisp->wlc->context.settings;
+	rdpSettings* settings = NULL;
+
+	WINPR_ASSERT(wlfDisp);
+	WINPR_ASSERT(wlfDisp->wlc);
+
+	settings = wlfDisp->wlc->common.context.settings;
+	WINPR_ASSERT(settings);
+
 	wlfDisp->lastSentWidth = wlfDisp->targetWidth;
 	wlfDisp->lastSentHeight = wlfDisp->targetHeight;
-	wlfDisp->lastSentDesktopOrientation = settings->DesktopOrientation;
-	wlfDisp->lastSentDesktopScaleFactor = settings->DesktopScaleFactor;
-	wlfDisp->lastSentDeviceScaleFactor = settings->DeviceScaleFactor;
+	wlfDisp->lastSentDesktopOrientation =
+	    freerdp_settings_get_uint16(settings, FreeRDP_DesktopOrientation);
+	wlfDisp->lastSentDesktopScaleFactor =
+	    freerdp_settings_get_uint32(settings, FreeRDP_DesktopScaleFactor);
+	wlfDisp->lastSentDeviceScaleFactor =
+	    freerdp_settings_get_uint32(settings, FreeRDP_DeviceScaleFactor);
 	wlfDisp->fullscreen = wlfDisp->wlc->fullscreen;
 	return TRUE;
 }
@@ -85,14 +106,14 @@ static BOOL wlf_update_last_sent(wlfDispContext* wlfDisp)
 static BOOL wlf_disp_sendResize(wlfDispContext* wlfDisp)
 {
 	DISPLAY_CONTROL_MONITOR_LAYOUT layout;
-	wlfContext* wlc;
-	rdpSettings* settings;
+	wlfContext* wlc = NULL;
+	rdpSettings* settings = NULL;
 
 	if (!wlfDisp || !wlfDisp->wlc)
 		return FALSE;
 
 	wlc = wlfDisp->wlc;
-	settings = wlc->context.settings;
+	settings = wlc->common.context.settings;
 
 	if (!settings)
 		return FALSE;
@@ -108,26 +129,27 @@ static BOOL wlf_disp_sendResize(wlfDispContext* wlfDisp)
 	if (!wlf_disp_settings_changed(wlfDisp))
 		return TRUE;
 
-	/* TODO: Multimonitor support for wayland
-	if (wlc->fullscreen && (settings->MonitorCount > 0))
+	if (wlc->fullscreen && (freerdp_settings_get_uint32(settings, FreeRDP_MonitorCount) > 0))
 	{
-	    if (wlf_disp_sendLayout(wlfDisp->disp, settings->MonitorDefArray,
-	                           settings->MonitorCount) != CHANNEL_RC_OK)
-	        return FALSE;
+		const rdpMonitor* monitors =
+		    freerdp_settings_get_pointer(settings, FreeRDP_MonitorDefArray);
+		const size_t nmonitors = freerdp_settings_get_uint32(settings, FreeRDP_MonitorCount);
+		if (wlf_disp_sendLayout(wlfDisp->disp, monitors, nmonitors) != CHANNEL_RC_OK)
+			return FALSE;
 	}
 	else
-	*/
 	{
 		wlfDisp->waitingResize = TRUE;
 		layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;
 		layout.Top = layout.Left = 0;
-		layout.Width = wlfDisp->targetWidth;
-		layout.Height = wlfDisp->targetHeight;
-		layout.Orientation = settings->DesktopOrientation;
-		layout.DesktopScaleFactor = settings->DesktopScaleFactor;
-		layout.DeviceScaleFactor = settings->DeviceScaleFactor;
-		layout.PhysicalWidth = wlfDisp->targetWidth;
-		layout.PhysicalHeight = wlfDisp->targetHeight;
+		layout.Width = WINPR_ASSERTING_INT_CAST(uint32_t, wlfDisp->targetWidth);
+		layout.Height = WINPR_ASSERTING_INT_CAST(uint32_t, wlfDisp->targetHeight);
+		layout.Orientation = freerdp_settings_get_uint16(settings, FreeRDP_DesktopOrientation);
+		layout.DesktopScaleFactor =
+		    freerdp_settings_get_uint32(settings, FreeRDP_DesktopScaleFactor);
+		layout.DeviceScaleFactor = freerdp_settings_get_uint32(settings, FreeRDP_DeviceScaleFactor);
+		layout.PhysicalWidth = WINPR_ASSERTING_INT_CAST(uint32_t, wlfDisp->targetWidth);
+		layout.PhysicalHeight = WINPR_ASSERTING_INT_CAST(uint32_t, wlfDisp->targetHeight);
 
 		if (IFCALLRESULT(CHANNEL_RC_OK, wlfDisp->disp->SendMonitorLayout, wlfDisp->disp, 1,
 		                 &layout) != CHANNEL_RC_OK)
@@ -136,8 +158,9 @@ static BOOL wlf_disp_sendResize(wlfDispContext* wlfDisp)
 	return wlf_update_last_sent(wlfDisp);
 }
 
-static BOOL wlf_disp_set_window_resizable(wlfDispContext* wlfDisp)
+static BOOL wlf_disp_set_window_resizable(WINPR_ATTR_UNUSED wlfDispContext* wlfDisp)
 {
+	WLog_ERR("TODO", "TODO: implement");
 #if 0 // TODO
 #endif
 	return TRUE;
@@ -146,7 +169,7 @@ static BOOL wlf_disp_set_window_resizable(wlfDispContext* wlfDisp)
 static BOOL wlf_disp_check_context(void* context, wlfContext** ppwlc, wlfDispContext** ppwlfDisp,
                                    rdpSettings** ppSettings)
 {
-	wlfContext* wlc;
+	wlfContext* wlc = NULL;
 
 	if (!context)
 		return FALSE;
@@ -156,27 +179,27 @@ static BOOL wlf_disp_check_context(void* context, wlfContext** ppwlc, wlfDispCon
 	if (!(wlc->disp))
 		return FALSE;
 
-	if (!wlc->context.settings)
+	if (!wlc->common.context.settings)
 		return FALSE;
 
 	*ppwlc = wlc;
 	*ppwlfDisp = wlc->disp;
-	*ppSettings = wlc->context.settings;
+	*ppSettings = wlc->common.context.settings;
 	return TRUE;
 }
 
-static void wlf_disp_OnActivated(void* context, ActivatedEventArgs* e)
+static void wlf_disp_OnActivated(void* context, const ActivatedEventArgs* e)
 {
-	wlfContext* wlc;
-	wlfDispContext* wlfDisp;
-	rdpSettings* settings;
+	wlfContext* wlc = NULL;
+	wlfDispContext* wlfDisp = NULL;
+	rdpSettings* settings = NULL;
 
 	if (!wlf_disp_check_context(context, &wlc, &wlfDisp, &settings))
 		return;
 
 	wlfDisp->waitingResize = FALSE;
 
-	if (wlfDisp->activated && !settings->Fullscreen)
+	if (wlfDisp->activated && !freerdp_settings_get_bool(settings, FreeRDP_Fullscreen))
 	{
 		wlf_disp_set_window_resizable(wlfDisp);
 
@@ -187,11 +210,11 @@ static void wlf_disp_OnActivated(void* context, ActivatedEventArgs* e)
 	}
 }
 
-static void wlf_disp_OnGraphicsReset(void* context, GraphicsResetEventArgs* e)
+static void wlf_disp_OnGraphicsReset(void* context, const GraphicsResetEventArgs* e)
 {
-	wlfContext* wlc;
-	wlfDispContext* wlfDisp;
-	rdpSettings* settings;
+	wlfContext* wlc = NULL;
+	wlfDispContext* wlfDisp = NULL;
+	rdpSettings* settings = NULL;
 
 	WINPR_UNUSED(e);
 	if (!wlf_disp_check_context(context, &wlc, &wlfDisp, &settings))
@@ -199,24 +222,24 @@ static void wlf_disp_OnGraphicsReset(void* context, GraphicsResetEventArgs* e)
 
 	wlfDisp->waitingResize = FALSE;
 
-	if (wlfDisp->activated && !settings->Fullscreen)
+	if (wlfDisp->activated && !freerdp_settings_get_bool(settings, FreeRDP_Fullscreen))
 	{
 		wlf_disp_set_window_resizable(wlfDisp);
 		wlf_disp_sendResize(wlfDisp);
 	}
 }
 
-static void wlf_disp_OnTimer(void* context, TimerEventArgs* e)
+static void wlf_disp_OnTimer(void* context, const TimerEventArgs* e)
 {
-	wlfContext* wlc;
-	wlfDispContext* wlfDisp;
-	rdpSettings* settings;
+	wlfContext* wlc = NULL;
+	wlfDispContext* wlfDisp = NULL;
+	rdpSettings* settings = NULL;
 
 	WINPR_UNUSED(e);
 	if (!wlf_disp_check_context(context, &wlc, &wlfDisp, &settings))
 		return;
 
-	if (!wlfDisp->activated || settings->Fullscreen)
+	if (!wlfDisp->activated || freerdp_settings_get_bool(settings, FreeRDP_Fullscreen))
 		return;
 
 	wlf_disp_sendResize(wlfDisp);
@@ -224,22 +247,28 @@ static void wlf_disp_OnTimer(void* context, TimerEventArgs* e)
 
 wlfDispContext* wlf_disp_new(wlfContext* wlc)
 {
-	wlfDispContext* ret;
+	wlfDispContext* ret = NULL;
+	wPubSub* pubSub = NULL;
+	rdpSettings* settings = NULL;
 
-	if (!wlc || !wlc->context.settings || !wlc->context.pubSub)
+	if (!wlc || !wlc->common.context.settings || !wlc->common.context.pubSub)
 		return NULL;
 
+	settings = wlc->common.context.settings;
+	pubSub = wlc->common.context.pubSub;
 	ret = calloc(1, sizeof(wlfDispContext));
 
 	if (!ret)
 		return NULL;
 
 	ret->wlc = wlc;
-	ret->lastSentWidth = ret->targetWidth = wlc->context.settings->DesktopWidth;
-	ret->lastSentHeight = ret->targetHeight = wlc->context.settings->DesktopHeight;
-	PubSub_SubscribeActivated(wlc->context.pubSub, wlf_disp_OnActivated);
-	PubSub_SubscribeGraphicsReset(wlc->context.pubSub, wlf_disp_OnGraphicsReset);
-	PubSub_SubscribeTimer(wlc->context.pubSub, wlf_disp_OnTimer);
+	ret->lastSentWidth = ret->targetWidth =
+	    WINPR_ASSERTING_INT_CAST(int, freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth));
+	ret->lastSentHeight = ret->targetHeight =
+	    WINPR_ASSERTING_INT_CAST(int, freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight));
+	PubSub_SubscribeActivated(pubSub, wlf_disp_OnActivated);
+	PubSub_SubscribeGraphicsReset(pubSub, wlf_disp_OnGraphicsReset);
+	PubSub_SubscribeTimer(pubSub, wlf_disp_OnTimer);
 	return ret;
 }
 
@@ -250,49 +279,65 @@ void wlf_disp_free(wlfDispContext* disp)
 
 	if (disp->wlc)
 	{
-		PubSub_UnsubscribeActivated(disp->wlc->context.pubSub, wlf_disp_OnActivated);
-		PubSub_UnsubscribeGraphicsReset(disp->wlc->context.pubSub, wlf_disp_OnGraphicsReset);
-		PubSub_UnsubscribeTimer(disp->wlc->context.pubSub, wlf_disp_OnTimer);
+		wPubSub* pubSub = disp->wlc->common.context.pubSub;
+		PubSub_UnsubscribeActivated(pubSub, wlf_disp_OnActivated);
+		PubSub_UnsubscribeGraphicsReset(pubSub, wlf_disp_OnGraphicsReset);
+		PubSub_UnsubscribeTimer(pubSub, wlf_disp_OnTimer);
 	}
 
 	free(disp);
 }
 
-UINT wlf_disp_sendLayout(DispClientContext* disp, rdpMonitor* monitors, size_t nmonitors)
+UINT wlf_disp_sendLayout(DispClientContext* disp, const rdpMonitor* monitors, size_t nmonitors)
 {
 	UINT ret = CHANNEL_RC_OK;
-	DISPLAY_CONTROL_MONITOR_LAYOUT* layouts;
-	size_t i;
-	wlfDispContext* wlfDisp = (wlfDispContext*)disp->custom;
-	rdpSettings* settings = wlfDisp->wlc->context.settings;
+	DISPLAY_CONTROL_MONITOR_LAYOUT* layouts = NULL;
+	wlfDispContext* wlfDisp = NULL;
+	rdpSettings* settings = NULL;
+
+	WINPR_ASSERT(disp);
+	WINPR_ASSERT(monitors);
+	WINPR_ASSERT(nmonitors > 0);
+	WINPR_ASSERT(nmonitors <= UINT32_MAX);
+
+	wlfDisp = (wlfDispContext*)disp->custom;
+	WINPR_ASSERT(wlfDisp);
+	WINPR_ASSERT(wlfDisp->wlc);
+
+	settings = wlfDisp->wlc->common.context.settings;
+	WINPR_ASSERT(settings);
+
 	layouts = calloc(nmonitors, sizeof(DISPLAY_CONTROL_MONITOR_LAYOUT));
 
 	if (!layouts)
 		return CHANNEL_RC_NO_MEMORY;
 
-	for (i = 0; i < nmonitors; i++)
+	for (size_t i = 0; i < nmonitors; i++)
 	{
-		layouts[i].Flags = (monitors[i].is_primary ? DISPLAY_CONTROL_MONITOR_PRIMARY : 0);
-		layouts[i].Left = monitors[i].x;
-		layouts[i].Top = monitors[i].y;
-		layouts[i].Width = monitors[i].width;
-		layouts[i].Height = monitors[i].height;
-		layouts[i].Orientation = ORIENTATION_LANDSCAPE;
-		layouts[i].PhysicalWidth = monitors[i].attributes.physicalWidth;
-		layouts[i].PhysicalHeight = monitors[i].attributes.physicalHeight;
+		const rdpMonitor* monitor = &monitors[i];
+		DISPLAY_CONTROL_MONITOR_LAYOUT* layout = &layouts[i];
 
-		switch (monitors[i].attributes.orientation)
+		layout->Flags = (monitor->is_primary ? DISPLAY_CONTROL_MONITOR_PRIMARY : 0);
+		layout->Left = monitor->x;
+		layout->Top = monitor->y;
+		layout->Width = WINPR_ASSERTING_INT_CAST(UINT32, monitor->width);
+		layout->Height = WINPR_ASSERTING_INT_CAST(UINT32, monitor->height);
+		layout->Orientation = ORIENTATION_LANDSCAPE;
+		layout->PhysicalWidth = monitor->attributes.physicalWidth;
+		layout->PhysicalHeight = monitor->attributes.physicalHeight;
+
+		switch (monitor->attributes.orientation)
 		{
 			case 90:
-				layouts[i].Orientation = ORIENTATION_PORTRAIT;
+				layout->Orientation = ORIENTATION_PORTRAIT;
 				break;
 
 			case 180:
-				layouts[i].Orientation = ORIENTATION_LANDSCAPE_FLIPPED;
+				layout->Orientation = ORIENTATION_LANDSCAPE_FLIPPED;
 				break;
 
 			case 270:
-				layouts[i].Orientation = ORIENTATION_PORTRAIT_FLIPPED;
+				layout->Orientation = ORIENTATION_PORTRAIT_FLIPPED;
 				break;
 
 			case 0:
@@ -304,15 +349,17 @@ UINT wlf_disp_sendLayout(DispClientContext* disp, rdpMonitor* monitors, size_t n
 				 *
 				 * So we default to ORIENTATION_LANDSCAPE
 				 */
-				layouts[i].Orientation = ORIENTATION_LANDSCAPE;
+				layout->Orientation = ORIENTATION_LANDSCAPE;
 				break;
 		}
 
-		layouts[i].DesktopScaleFactor = settings->DesktopScaleFactor;
-		layouts[i].DeviceScaleFactor = settings->DeviceScaleFactor;
+		layout->DesktopScaleFactor =
+		    freerdp_settings_get_uint32(settings, FreeRDP_DesktopScaleFactor);
+		layout->DeviceScaleFactor =
+		    freerdp_settings_get_uint32(settings, FreeRDP_DeviceScaleFactor);
 	}
 
-	ret = IFCALLRESULT(CHANNEL_RC_OK, disp->SendMonitorLayout, disp, nmonitors, layouts);
+	ret = IFCALLRESULT(CHANNEL_RC_OK, disp->SendMonitorLayout, disp, (UINT32)nmonitors, layouts);
 	free(layouts);
 	return ret;
 }
@@ -331,15 +378,25 @@ static UINT wlf_DisplayControlCaps(DispClientContext* disp, UINT32 maxNumMonitor
                                    UINT32 maxMonitorAreaFactorA, UINT32 maxMonitorAreaFactorB)
 {
 	/* we're called only if dynamic resolution update is activated */
-	wlfDispContext* wlfDisp = (wlfDispContext*)disp->custom;
-	rdpSettings* settings = wlfDisp->wlc->context.settings;
+	wlfDispContext* wlfDisp = NULL;
+	rdpSettings* settings = NULL;
+
+	WINPR_ASSERT(disp);
+
+	wlfDisp = (wlfDispContext*)disp->custom;
+	WINPR_ASSERT(wlfDisp);
+	WINPR_ASSERT(wlfDisp->wlc);
+
+	settings = wlfDisp->wlc->common.context.settings;
+	WINPR_ASSERT(settings);
+
 	WLog_DBG(TAG,
 	         "DisplayControlCapsPdu: MaxNumMonitors: %" PRIu32 " MaxMonitorAreaFactorA: %" PRIu32
 	         " MaxMonitorAreaFactorB: %" PRIu32 "",
 	         maxNumMonitors, maxMonitorAreaFactorA, maxMonitorAreaFactorB);
 	wlfDisp->activated = TRUE;
 
-	if (settings->Fullscreen)
+	if (freerdp_settings_get_bool(settings, FreeRDP_Fullscreen))
 		return CHANNEL_RC_OK;
 
 	WLog_DBG(TAG, "DisplayControlCapsPdu: setting the window as resizable");
@@ -348,12 +405,12 @@ static UINT wlf_DisplayControlCaps(DispClientContext* disp, UINT32 maxNumMonitor
 
 BOOL wlf_disp_init(wlfDispContext* wlfDisp, DispClientContext* disp)
 {
-	rdpSettings* settings;
+	rdpSettings* settings = NULL;
 
 	if (!wlfDisp || !wlfDisp->wlc || !disp)
 		return FALSE;
 
-	settings = wlfDisp->wlc->context.settings;
+	settings = wlfDisp->wlc->common.context.settings;
 
 	if (!settings)
 		return FALSE;
@@ -361,7 +418,7 @@ BOOL wlf_disp_init(wlfDispContext* wlfDisp, DispClientContext* disp)
 	wlfDisp->disp = disp;
 	disp->custom = (void*)wlfDisp;
 
-	if (settings->DynamicResolutionUpdate)
+	if (freerdp_settings_get_bool(settings, FreeRDP_DynamicResolutionUpdate))
 	{
 		disp->DisplayControlCaps = wlf_DisplayControlCaps;
 	}
@@ -380,11 +437,12 @@ BOOL wlf_disp_uninit(wlfDispContext* wlfDisp, DispClientContext* disp)
 
 int wlf_list_monitors(wlfContext* wlc)
 {
-	uint32_t i, nmonitors = UwacDisplayGetNbOutputs(wlc->display);
+	uint32_t nmonitors = UwacDisplayGetNbOutputs(wlc->display);
 
-	for (i = 0; i < nmonitors; i++)
+	for (uint32_t i = 0; i < nmonitors; i++)
 	{
-		const UwacOutput* monitor = UwacDisplayGetOutput(wlc->display, i);
+		const UwacOutput* monitor =
+		    UwacDisplayGetOutput(wlc->display, WINPR_ASSERTING_INT_CAST(int, i));
 		UwacSize resolution;
 		UwacPosition pos;
 
@@ -393,7 +451,7 @@ int wlf_list_monitors(wlfContext* wlc)
 		UwacOutputGetPosition(monitor, &pos);
 		UwacOutputGetResolution(monitor, &resolution);
 
-		printf("     %s [%d] %dx%d\t+%d+%d\n", (i == 0) ? "*" : " ", i, resolution.width,
+		printf("     %s [%u] %dx%d\t+%d+%d\n", (i == 0) ? "*" : " ", i, resolution.width,
 		       resolution.height, pos.x, pos.y);
 	}
 

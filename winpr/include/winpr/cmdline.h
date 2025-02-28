@@ -60,7 +60,7 @@
 #define COMMAND_LINE_SEPARATOR_EQUAL 0x00000200
 #define COMMAND_LINE_SEPARATOR_SPACE 0x00000400
 
-/* Supress COMMAND_LINE_ERROR_NO_KEYWORD return. */
+/* Suppress COMMAND_LINE_ERROR_NO_KEYWORD return. */
 #define COMMAND_LINE_IGN_UNKNOWN_KEYWORD 0x00001000
 #define COMMAND_LINE_SILENCE_PARSER 0x00002000
 
@@ -96,10 +96,7 @@
 #define BoolValueTrue ((LPSTR)1)
 #define BoolValueFalse ((LPSTR)0)
 
-typedef struct _COMMAND_LINE_ARGUMENT_A COMMAND_LINE_ARGUMENT_A;
-typedef struct _COMMAND_LINE_ARGUMENT_W COMMAND_LINE_ARGUMENT_W;
-
-struct _COMMAND_LINE_ARGUMENT_A
+typedef struct
 {
 	LPCSTR Name;
 	DWORD Flags;
@@ -109,9 +106,9 @@ struct _COMMAND_LINE_ARGUMENT_A
 	LONG Index;
 	LPCSTR Alias;
 	LPCSTR Text;
-};
+} COMMAND_LINE_ARGUMENT_A;
 
-struct _COMMAND_LINE_ARGUMENT_W
+typedef struct
 {
 	LPCWSTR Name;
 	DWORD Flags;
@@ -121,7 +118,7 @@ struct _COMMAND_LINE_ARGUMENT_W
 	LONG Index;
 	LPCWSTR Alias;
 	LPCWSTR Text;
-};
+} COMMAND_LINE_ARGUMENT_W;
 
 #ifdef UNICODE
 #define COMMAND_LINE_ARGUMENT COMMAND_LINE_ARGUMENT_W
@@ -160,12 +157,25 @@ extern "C"
 	WINPR_API const COMMAND_LINE_ARGUMENT_A*
 	CommandLineFindNextArgumentA(const COMMAND_LINE_ARGUMENT_A* argument);
 
+	/** @brief free arrays allocated by CommandLineParseCommaSeparatedValues(Ex)
+	 *
+	 *  @param ptr the pointer to free, may be \b NULL
+	 *
+	 *  @since version 3.10.0
+	 */
+	WINPR_API void CommandLineParserFree(char** ptr);
+
+	WINPR_ATTR_MALLOC(CommandLineParserFree, 1)
 	WINPR_API char** CommandLineParseCommaSeparatedValues(const char* list, size_t* count);
 
+	WINPR_ATTR_MALLOC(CommandLineParserFree, 1)
 	WINPR_API char** CommandLineParseCommaSeparatedValuesEx(const char* name, const char* list,
 	                                                        size_t* count);
 
+	WINPR_ATTR_MALLOC(free, 1)
 	WINPR_API char* CommandLineToCommaSeparatedValues(int argc, char* argv[]);
+
+	WINPR_ATTR_MALLOC(free, 1)
 	WINPR_API char* CommandLineToCommaSeparatedValuesEx(int argc, char* argv[],
 	                                                    const char* filters[], size_t number);
 

@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include "Appender.h"
 
@@ -52,7 +50,7 @@ wLogAppender* WLog_GetLogAppender(wLog* log)
 BOOL WLog_OpenAppender(wLog* log)
 {
 	int status = 0;
-	wLogAppender* appender;
+	wLogAppender* appender = NULL;
 
 	appender = WLog_GetLogAppender(log);
 
@@ -74,7 +72,7 @@ BOOL WLog_OpenAppender(wLog* log)
 BOOL WLog_CloseAppender(wLog* log)
 {
 	int status = 0;
-	wLogAppender* appender;
+	wLogAppender* appender = NULL;
 
 	appender = WLog_GetLogAppender(log);
 
@@ -95,7 +93,7 @@ BOOL WLog_CloseAppender(wLog* log)
 
 static wLogAppender* WLog_Appender_New(wLog* log, DWORD logAppenderType)
 {
-	wLogAppender* appender;
+	wLogAppender* appender = NULL;
 
 	if (!log)
 		return NULL;
@@ -114,28 +112,28 @@ static wLogAppender* WLog_Appender_New(wLog* log, DWORD logAppenderType)
 		case WLOG_APPENDER_CALLBACK:
 			appender = WLog_CallbackAppender_New(log);
 			break;
-#ifdef HAVE_SYSLOG_H
+#ifdef WINPR_HAVE_SYSLOG_H
 		case WLOG_APPENDER_SYSLOG:
 			appender = WLog_SyslogAppender_New(log);
 			break;
 #endif
-#ifdef HAVE_JOURNALD_H
+#ifdef WINPR_HAVE_JOURNALD_H
 		case WLOG_APPENDER_JOURNALD:
 			appender = WLog_JournaldAppender_New(log);
 			break;
 #endif
 		case WLOG_APPENDER_UDP:
-			appender = (wLogAppender*)WLog_UdpAppender_New(log);
+			appender = WLog_UdpAppender_New(log);
 			break;
 		default:
-			fprintf(stderr, "%s: unknown handler type %" PRIu32 "\n", __FUNCTION__,
-			        logAppenderType);
+			(void)fprintf(stderr, "%s: unknown handler type %" PRIu32 "\n", __func__,
+			              logAppenderType);
 			appender = NULL;
 			break;
 	}
 
 	if (!appender)
-		appender = (wLogAppender*)WLog_ConsoleAppender_New(log);
+		appender = WLog_ConsoleAppender_New(log);
 
 	if (!appender)
 		return NULL;

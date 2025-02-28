@@ -17,25 +17,23 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/collections.h>
 #include <winpr/assert.h>
 
-typedef struct _wLinkedListItem wLinkedListNode;
+typedef struct s_wLinkedListItem wLinkedListNode;
 
-struct _wLinkedListItem
+struct s_wLinkedListItem
 {
 	void* value;
 	wLinkedListNode* prev;
 	wLinkedListNode* next;
 };
 
-struct _wLinkedList
+struct s_wLinkedList
 {
-	int count;
+	size_t count;
 	int initial;
 	wLinkedListNode* head;
 	wLinkedListNode* tail;
@@ -58,7 +56,7 @@ struct _wLinkedList
  * Gets the number of nodes actually contained in the LinkedList.
  */
 
-int LinkedList_Count(wLinkedList* list)
+size_t LinkedList_Count(wLinkedList* list)
 {
 	WINPR_ASSERT(list);
 	return list->count;
@@ -100,8 +98,8 @@ void* LinkedList_Last(wLinkedList* list)
 
 BOOL LinkedList_Contains(wLinkedList* list, const void* value)
 {
-	wLinkedListNode* item;
-	OBJECT_EQUALS_FN keyEquals;
+	wLinkedListNode* item = NULL;
+	OBJECT_EQUALS_FN keyEquals = NULL;
 
 	WINPR_ASSERT(list);
 	if (!list->head)
@@ -123,8 +121,8 @@ BOOL LinkedList_Contains(wLinkedList* list, const void* value)
 
 static wLinkedListNode* LinkedList_FreeNode(wLinkedList* list, wLinkedListNode* node)
 {
-	wLinkedListNode* next;
-	wLinkedListNode* prev;
+	wLinkedListNode* next = NULL;
+	wLinkedListNode* prev = NULL;
 
 	WINPR_ASSERT(list);
 	WINPR_ASSERT(node);
@@ -160,7 +158,7 @@ static wLinkedListNode* LinkedList_FreeNode(wLinkedList* list, wLinkedListNode* 
 
 void LinkedList_Clear(wLinkedList* list)
 {
-	wLinkedListNode* node;
+	wLinkedListNode* node = NULL;
 	WINPR_ASSERT(list);
 	if (!list->head)
 		return;
@@ -176,7 +174,7 @@ void LinkedList_Clear(wLinkedList* list)
 
 static wLinkedListNode* LinkedList_Create(wLinkedList* list, const void* value)
 {
-	wLinkedListNode* node;
+	wLinkedListNode* node = NULL;
 
 	WINPR_ASSERT(list);
 	node = (wLinkedListNode*)calloc(1, sizeof(wLinkedListNode));
@@ -187,7 +185,15 @@ static wLinkedListNode* LinkedList_Create(wLinkedList* list, const void* value)
 	if (list->object.fnObjectNew)
 		node->value = list->object.fnObjectNew(value);
 	else
-		node->value = (void*)value;
+	{
+		union
+		{
+			const void* cpv;
+			void* pv;
+		} cnv;
+		cnv.cpv = value;
+		node->value = cnv.pv;
+	}
 
 	if (list->object.fnObjectInit)
 		list->object.fnObjectInit(node);
@@ -252,8 +258,8 @@ BOOL LinkedList_AddLast(wLinkedList* list, const void* value)
 
 BOOL LinkedList_Remove(wLinkedList* list, const void* value)
 {
-	wLinkedListNode* node;
-	OBJECT_EQUALS_FN keyEquals;
+	wLinkedListNode* node = NULL;
+	OBJECT_EQUALS_FN keyEquals = NULL;
 	WINPR_ASSERT(list);
 
 	keyEquals = list->object.fnObjectEquals;

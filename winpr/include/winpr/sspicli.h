@@ -42,13 +42,13 @@
 #define LOGON32_PROVIDER_WINNT50 3
 #define LOGON32_PROVIDER_VIRTUAL 4
 
-typedef struct _QUOTA_LIMITS
+typedef struct
 {
-	SIZE_T PagedPoolLimit;
-	SIZE_T NonPagedPoolLimit;
-	SIZE_T MinimumWorkingSetSize;
-	SIZE_T MaximumWorkingSetSize;
-	SIZE_T PagefileLimit;
+	size_t PagedPoolLimit;
+	size_t NonPagedPoolLimit;
+	size_t MinimumWorkingSetSize;
+	size_t MaximumWorkingSetSize;
+	size_t PagefileLimit;
 	LARGE_INTEGER TimeLimit;
 } QUOTA_LIMITS, *PQUOTA_LIMITS;
 

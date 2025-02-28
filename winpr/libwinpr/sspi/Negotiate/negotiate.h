@@ -26,33 +26,32 @@
 
 #define NTLM_OID "1.3.6.1.4.1.311.2.2.10"
 
-enum _NEGOTIATE_STATE
+typedef enum
 {
 	NEGOTIATE_STATE_INITIAL,
-	NEGOTIATE_STATE_NEGOINIT,
+	NEGOTIATE_STATE_FINAL_OPTIMISTIC,
 	NEGOTIATE_STATE_NEGORESP,
-	NEGOTIATE_STATE_FINAL
-};
-typedef enum _NEGOTIATE_STATE NEGOTIATE_STATE;
+	NEGOTIATE_STATE_MIC,
+	NEGOTIATE_STATE_FINAL,
+} NEGOTIATE_STATE;
 
-struct _NEGOTIATE_CONTEXT
+typedef struct Mech_st Mech;
+
+typedef struct
 {
 	NEGOTIATE_STATE state;
-	UINT32 NegotiateFlags;
-	PCtxtHandle auth_ctx;
-	SecBuffer NegoInitMessage;
-
-	CtxtHandle SubContext;
-
-	BOOL kerberos;
-	const SecurityFunctionTableA* sspiA;
-	const SecurityFunctionTableW* sspiW;
-};
-typedef struct _NEGOTIATE_CONTEXT NEGOTIATE_CONTEXT;
+	CtxtHandle sub_context;
+	SecBuffer mechTypes;
+	const Mech* mech;
+	BOOL mic;
+	BOOL spnego;
+} NEGOTIATE_CONTEXT;
 
 extern const SecPkgInfoA NEGOTIATE_SecPkgInfoA;
 extern const SecPkgInfoW NEGOTIATE_SecPkgInfoW;
 extern const SecurityFunctionTableA NEGOTIATE_SecurityFunctionTableA;
 extern const SecurityFunctionTableW NEGOTIATE_SecurityFunctionTableW;
+
+BOOL NEGOTIATE_init(void);
 
 #endif /* WINPR_SSPI_NEGOTIATE_PRIVATE_H */

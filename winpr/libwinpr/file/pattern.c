@@ -17,20 +17,18 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/crt.h>
 #include <winpr/handle.h>
 
 #include <winpr/file.h>
 
-#ifdef HAVE_UNISTD_H
+#ifdef WINPR_HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 
-#ifdef HAVE_FCNTL_H
+#ifdef WINPR_HAVE_FCNTL_H
 #include <fcntl.h>
 #endif
 
@@ -44,7 +42,7 @@
 
 LPSTR FilePatternFindNextWildcardA(LPCSTR lpPattern, DWORD* pFlags)
 {
-	LPSTR lpWildcard;
+	LPSTR lpWildcard = NULL;
 	*pFlags = 0;
 	lpWildcard = strpbrk(lpPattern, "*?~");
 
@@ -87,7 +85,7 @@ static BOOL FilePatternMatchSubExpressionA(LPCSTR lpFileName, size_t cchFileName
                                            size_t cchX, LPCSTR lpY, size_t cchY, LPCSTR lpWildcard,
                                            LPCSTR* ppMatchEnd)
 {
-	LPCSTR lpMatch;
+	LPCSTR lpMatch = NULL;
 
 	if (!lpFileName)
 		return FALSE;
@@ -199,15 +197,15 @@ static BOOL FilePatternMatchSubExpressionA(LPCSTR lpFileName, size_t cchFileName
 
 BOOL FilePatternMatchA(LPCSTR lpFileName, LPCSTR lpPattern)
 {
-	BOOL match;
-	LPCSTR lpTail;
-	size_t cchTail;
-	size_t cchPattern;
-	size_t cchFileName;
-	DWORD dwFlags;
-	DWORD dwNextFlags;
-	LPSTR lpWildcard;
-	LPSTR lpNextWildcard;
+	BOOL match = 0;
+	LPCSTR lpTail = NULL;
+	size_t cchTail = 0;
+	size_t cchPattern = 0;
+	size_t cchFileName = 0;
+	DWORD dwFlags = 0;
+	DWORD dwNextFlags = 0;
+	LPSTR lpWildcard = NULL;
+	LPSTR lpNextWildcard = NULL;
 
 	/**
 	 * Wild Card Matching
@@ -218,7 +216,7 @@ BOOL FilePatternMatchA(LPCSTR lpFileName, LPCSTR lpPattern)
 	 * '~*'	DOS_STAR - matches 0 or more characters until encountering and matching final '.'
 	 *
 	 * '~?'	DOS_QM - matches any single character, or upon encountering a period or end of name
-	 *               string, advances the expresssion to the end of the set of contiguous DOS_QMs.
+	 *               string, advances the expression to the end of the set of contiguous DOS_QMs.
 	 *
 	 * '~.'	DOS_DOT - matches either a '.' or zero characters beyond name string.
 	 */
@@ -307,17 +305,17 @@ BOOL FilePatternMatchA(LPCSTR lpFileName, LPCSTR lpPattern)
 
 	if (lpWildcard)
 	{
-		LPCSTR lpX;
-		LPCSTR lpY;
-		size_t cchX;
-		size_t cchY;
+		LPCSTR lpX = NULL;
+		LPCSTR lpY = NULL;
+		size_t cchX = 0;
+		size_t cchY = 0;
 		LPCSTR lpMatchEnd = NULL;
-		LPCSTR lpSubPattern;
-		size_t cchSubPattern;
-		LPCSTR lpSubFileName;
-		size_t cchSubFileName;
-		size_t cchWildcard;
-		size_t cchNextWildcard;
+		LPCSTR lpSubPattern = NULL;
+		size_t cchSubPattern = 0;
+		LPCSTR lpSubFileName = NULL;
+		size_t cchSubFileName = 0;
+		size_t cchWildcard = 0;
+		size_t cchNextWildcard = 0;
 		cchSubPattern = cchPattern;
 		lpSubPattern = lpPattern;
 		cchSubFileName = cchFileName;
@@ -328,9 +326,9 @@ BOOL FilePatternMatchA(LPCSTR lpFileName, LPCSTR lpPattern)
 		if (!lpNextWildcard)
 		{
 			lpX = lpSubPattern;
-			cchX = (lpWildcard - lpSubPattern);
+			cchX = WINPR_ASSERTING_INT_CAST(size_t, (lpWildcard - lpSubPattern));
 			lpY = &lpSubPattern[cchX + cchWildcard];
-			cchY = (cchSubPattern - (lpY - lpSubPattern));
+			cchY = (cchSubPattern - WINPR_ASSERTING_INT_CAST(size_t, (lpY - lpSubPattern)));
 			match = FilePatternMatchSubExpressionA(lpSubFileName, cchSubFileName, lpX, cchX, lpY,
 			                                       cchY, lpWildcard, &lpMatchEnd);
 			return match;
@@ -339,12 +337,14 @@ BOOL FilePatternMatchA(LPCSTR lpFileName, LPCSTR lpPattern)
 		{
 			while (lpNextWildcard)
 			{
-				cchSubFileName = cchFileName - (lpSubFileName - lpFileName);
+				cchSubFileName =
+				    cchFileName - WINPR_ASSERTING_INT_CAST(size_t, (lpSubFileName - lpFileName));
 				cchNextWildcard = ((dwNextFlags & WILDCARD_DOS) ? 2 : 1);
 				lpX = lpSubPattern;
-				cchX = (lpWildcard - lpSubPattern);
+				cchX = WINPR_ASSERTING_INT_CAST(size_t, (lpWildcard - lpSubPattern));
 				lpY = &lpSubPattern[cchX + cchWildcard];
-				cchY = (lpNextWildcard - lpWildcard) - cchWildcard;
+				cchY =
+				    WINPR_ASSERTING_INT_CAST(size_t, (lpNextWildcard - lpWildcard)) - cchWildcard;
 				match = FilePatternMatchSubExpressionA(lpSubFileName, cchSubFileName, lpX, cchX,
 				                                       lpY, cchY, lpWildcard, &lpMatchEnd);
 

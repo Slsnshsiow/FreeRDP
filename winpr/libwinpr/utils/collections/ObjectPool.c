@@ -17,16 +17,14 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/crt.h>
 #include <winpr/assert.h>
 
 #include <winpr/collections.h>
 
-struct _wObjectPool
+struct s_wObjectPool
 {
 	size_t size;
 	size_t capacity;
@@ -96,11 +94,11 @@ void ObjectPool_Return(wObjectPool* pool, void* obj)
 
 	if ((pool->size + 1) >= pool->capacity)
 	{
-		size_t new_cap;
-		void** new_arr;
+		size_t new_cap = 0;
+		void** new_arr = NULL;
 
 		new_cap = pool->capacity * 2;
-		new_arr = (void**)realloc(pool->array, sizeof(void*) * new_cap);
+		new_arr = (void**)realloc((void*)pool->array, sizeof(void*) * new_cap);
 		if (!new_arr)
 			goto out;
 
@@ -180,7 +178,7 @@ void ObjectPool_Free(wObjectPool* pool)
 		if (pool->synchronized)
 			DeleteCriticalSection(&pool->lock);
 
-		free(pool->array);
+		free((void*)pool->array);
 
 		free(pool);
 	}

@@ -17,10 +17,9 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
+#include <winpr/assert.h>
 #include <winpr/crt.h>
 #include <winpr/pool.h>
 #include <winpr/library.h>
@@ -47,13 +46,13 @@ static BOOL CALLBACK init_module(PINIT_ONCE once, PVOID param, PVOID* context)
 
 	if (kernel32)
 	{
-		pCreateThreadpoolWork = (void*)GetProcAddress(kernel32, "CreateThreadpoolWork");
-		pCloseThreadpoolWork = (void*)GetProcAddress(kernel32, "CloseThreadpoolWork");
-		pSubmitThreadpoolWork = (void*)GetProcAddress(kernel32, "SubmitThreadpoolWork");
+		pCreateThreadpoolWork = GetProcAddressAs(kernel32, "CreateThreadpoolWork", void*);
+		pCloseThreadpoolWork = GetProcAddressAs(kernel32, "CloseThreadpoolWork", void*);
+		pSubmitThreadpoolWork = GetProcAddressAs(kernel32, "SubmitThreadpoolWork", void*);
 		pTrySubmitThreadpoolCallback =
-		    (void*)GetProcAddress(kernel32, "TrySubmitThreadpoolCallback");
+		    GetProcAddressAs(kernel32, "TrySubmitThreadpoolCallback", void*);
 		pWaitForThreadpoolWorkCallbacks =
-		    (void*)GetProcAddress(kernel32, "WaitForThreadpoolWorkCallbacks");
+		    GetProcAddressAs(kernel32, "WaitForThreadpoolWorkCallbacks", void*);
 	}
 
 	return TRUE;
@@ -66,7 +65,6 @@ static TP_CALLBACK_ENVIRON DEFAULT_CALLBACK_ENVIRONMENT = {
 	NULL, /* CleanupGroup */
 	NULL, /* CleanupGroupCancelCallback */
 	NULL, /* RaceDll */
-	NULL, /* ActivationContext */
 	NULL, /* FinalizationCallback */
 	{ 0 } /* Flags */
 };
@@ -118,6 +116,8 @@ VOID winpr_CloseThreadpoolWork(PTP_WORK pwk)
 
 #else
 
+	WINPR_ASSERT(pwk);
+	WINPR_ASSERT(pwk->CallbackEnvironment);
 	if (pwk->CallbackEnvironment->CleanupGroup)
 		ArrayList_Remove(pwk->CallbackEnvironment->CleanupGroup->groups, pwk);
 
@@ -127,8 +127,8 @@ VOID winpr_CloseThreadpoolWork(PTP_WORK pwk)
 
 VOID winpr_SubmitThreadpoolWork(PTP_WORK pwk)
 {
-	PTP_POOL pool;
-	PTP_CALLBACK_INSTANCE callbackInstance;
+	PTP_POOL pool = NULL;
+	PTP_CALLBACK_INSTANCE callbackInstance = NULL;
 #ifdef _WIN32
 	InitOnceExecuteOnce(&init_once_module, init_module, NULL, NULL);
 
@@ -139,6 +139,9 @@ VOID winpr_SubmitThreadpoolWork(PTP_WORK pwk)
 	}
 
 #endif
+
+	WINPR_ASSERT(pwk);
+	WINPR_ASSERT(pwk->CallbackEnvironment);
 	pool = pwk->CallbackEnvironment->Pool;
 	callbackInstance = (PTP_CALLBACK_INSTANCE)calloc(1, sizeof(TP_CALLBACK_INSTANCE));
 
@@ -146,12 +149,15 @@ VOID winpr_SubmitThreadpoolWork(PTP_WORK pwk)
 	{
 		callbackInstance->Work = pwk;
 		CountdownEvent_AddCount(pool->WorkComplete, 1);
-		Queue_Enqueue(pool->PendingQueue, callbackInstance);
+		if (!Queue_Enqueue(pool->PendingQueue, callbackInstance))
+			free(callbackInstance);
 	}
+	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc): Queue_Enqueue takes ownership of callbackInstance
 }
 
-BOOL winpr_TrySubmitThreadpoolCallback(PTP_SIMPLE_CALLBACK pfns, PVOID pv,
-                                       PTP_CALLBACK_ENVIRON pcbe)
+BOOL winpr_TrySubmitThreadpoolCallback(WINPR_ATTR_UNUSED PTP_SIMPLE_CALLBACK pfns,
+                                       WINPR_ATTR_UNUSED PVOID pv,
+                                       WINPR_ATTR_UNUSED PTP_CALLBACK_ENVIRON pcbe)
 {
 #ifdef _WIN32
 	InitOnceExecuteOnce(&init_once_module, init_module, NULL, NULL);
@@ -164,10 +170,12 @@ BOOL winpr_TrySubmitThreadpoolCallback(PTP_SIMPLE_CALLBACK pfns, PVOID pv,
 	return FALSE;
 }
 
-VOID winpr_WaitForThreadpoolWorkCallbacks(PTP_WORK pwk, BOOL fCancelPendingCallbacks)
+VOID winpr_WaitForThreadpoolWorkCallbacks(PTP_WORK pwk,
+                                          WINPR_ATTR_UNUSED BOOL fCancelPendingCallbacks)
 {
-	HANDLE event;
-	PTP_POOL pool;
+	HANDLE event = NULL;
+	PTP_POOL pool = NULL;
+
 #ifdef _WIN32
 	InitOnceExecuteOnce(&init_once_module, init_module, NULL, NULL);
 
@@ -178,7 +186,12 @@ VOID winpr_WaitForThreadpoolWorkCallbacks(PTP_WORK pwk, BOOL fCancelPendingCallb
 	}
 
 #endif
+	WINPR_ASSERT(pwk);
+	WINPR_ASSERT(pwk->CallbackEnvironment);
+
 	pool = pwk->CallbackEnvironment->Pool;
+	WINPR_ASSERT(pool);
+
 	event = CountdownEvent_WaitHandle(pool->WorkComplete);
 
 	if (WaitForSingleObject(event, INFINITE) != WAIT_OBJECT_0)

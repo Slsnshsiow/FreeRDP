@@ -30,12 +30,39 @@
 
 #include <winpr/stream.h>
 
+typedef struct
+{
+	rdpInput common;
+	/* Internal */
+
+	rdpInputProxy* proxy;
+	wMessageQueue* queue;
+
+	UINT64 lastInputTimestamp;
+	UINT16 lastX;
+	UINT16 lastY;
+} rdp_input_internal;
+
+static INLINE rdp_input_internal* input_cast(rdpInput* input)
+{
+	union
+	{
+		rdpInput* pub;
+		rdp_input_internal* internal;
+	} cnv;
+
+	WINPR_ASSERT(input);
+	cnv.pub = input;
+	return cnv.internal;
+}
 FREERDP_LOCAL BOOL input_recv(rdpInput* input, wStream* s);
 
 FREERDP_LOCAL int input_process_events(rdpInput* input);
 FREERDP_LOCAL BOOL input_register_client_callbacks(rdpInput* input);
 
-FREERDP_LOCAL rdpInput* input_new(rdpRdp* rdp);
 FREERDP_LOCAL void input_free(rdpInput* input);
+
+WINPR_ATTR_MALLOC(input_free, 1)
+FREERDP_LOCAL rdpInput* input_new(rdpRdp* rdp);
 
 #endif /* FREERDP_LIB_CORE_INPUT_H */

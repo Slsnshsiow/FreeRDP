@@ -37,7 +37,7 @@
 
 typedef struct drdynvc_plugin drdynvcPlugin;
 
-struct _DVCMAN
+typedef struct
 {
 	IWTSVirtualChannelManager iface;
 
@@ -46,13 +46,12 @@ struct _DVCMAN
 	wArrayList* plugin_names;
 	wArrayList* plugins;
 
-	wArrayList* listeners;
-	wArrayList* channels;
+	wHashTable* listeners;
+	wHashTable* channelsById;
 	wStreamPool* pool;
-};
-typedef struct _DVCMAN DVCMAN;
+} DVCMAN;
 
-struct _DVCMAN_LISTENER
+typedef struct
 {
 	IWTSListener iface;
 
@@ -60,24 +59,30 @@ struct _DVCMAN_LISTENER
 	char* channel_name;
 	UINT32 flags;
 	IWTSListenerCallback* listener_callback;
-};
-typedef struct _DVCMAN_LISTENER DVCMAN_LISTENER;
+} DVCMAN_LISTENER;
 
-struct _DVCMAN_ENTRY_POINTS
+typedef struct
 {
 	IDRDYNVC_ENTRY_POINTS iface;
 
 	DVCMAN* dvcman;
 	const ADDIN_ARGV* args;
-	rdpSettings* settings;
-};
-typedef struct _DVCMAN_ENTRY_POINTS DVCMAN_ENTRY_POINTS;
+	rdpContext* context;
+} DVCMAN_ENTRY_POINTS;
 
-struct _DVCMAN_CHANNEL
+typedef enum
+{
+	DVC_CHANNEL_INIT,
+	DVC_CHANNEL_RUNNING,
+	DVC_CHANNEL_CLOSED
+} DVC_CHANNEL_STATE;
+
+typedef struct
 {
 	IWTSVirtualChannel iface;
 
-	int status;
+	volatile LONG refCounter;
+	DVC_CHANNEL_STATE state;
 	DVCMAN* dvcman;
 	void* pInterface;
 	UINT32 channel_id;
@@ -87,10 +92,9 @@ struct _DVCMAN_CHANNEL
 	wStream* dvc_data;
 	UINT32 dvc_data_length;
 	CRITICAL_SECTION lock;
-};
-typedef struct _DVCMAN_CHANNEL DVCMAN_CHANNEL;
+} DVCMAN_CHANNEL;
 
-enum _DRDYNVC_STATE
+typedef enum
 {
 	DRDYNVC_STATE_INITIAL,
 	DRDYNVC_STATE_CAPABILITIES,
@@ -98,8 +102,7 @@ enum _DRDYNVC_STATE
 	DRDYNVC_STATE_OPENING_CHANNEL,
 	DRDYNVC_STATE_SEND_RECEIVE,
 	DRDYNVC_STATE_FINAL
-};
-typedef enum _DRDYNVC_STATE DRDYNVC_STATE;
+} DRDYNVC_STATE;
 
 struct drdynvc_plugin
 {
@@ -108,6 +111,7 @@ struct drdynvc_plugin
 
 	wLog* log;
 	HANDLE thread;
+	BOOL async;
 	wStream* data_in;
 	void* InitHandle;
 	DWORD OpenHandle;

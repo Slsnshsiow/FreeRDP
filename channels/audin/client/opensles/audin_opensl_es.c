@@ -19,9 +19,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <freerdp/config.h>
 
 #include <winpr/assert.h>
 #include <stdio.h>
@@ -31,6 +29,7 @@
 #include <winpr/crt.h>
 #include <winpr/cmdline.h>
 
+#include <freerdp/freerdp.h>
 #include <freerdp/addin.h>
 #include <freerdp/channels/rdpsnd.h>
 
@@ -40,7 +39,7 @@
 #include "audin_main.h"
 #include "opensl_io.h"
 
-typedef struct _AudinOpenSLESDevice
+typedef struct
 {
 	IAudinDevice iface;
 
@@ -69,7 +68,7 @@ static void audin_receive(void* context, const void* data, size_t size)
 
 	if (!opensles || !data)
 	{
-		WLog_ERR(TAG, "[%s] Invalid arguments context=%p, data=%p", __FUNCTION__, opensles, data);
+		WLog_ERR(TAG, "Invalid arguments context=%p, data=%p", opensles, data);
 		return;
 	}
 
@@ -121,7 +120,7 @@ static BOOL audin_opensles_format_supported(IAudinDevice* device, const AUDIO_FO
 			break;
 
 		default:
-			WLog_Print(opensles->log, WLOG_DEBUG, "Encoding '%s' [0x%04X" PRIX16 "] not supported",
+			WLog_Print(opensles->log, WLOG_DEBUG, "Encoding '%s' [0x%04" PRIX16 "] not supported",
 			           audio_format_get_tag_string(format->wFormatTag), format->wFormatTag);
 			break;
 	}
@@ -248,7 +247,7 @@ static UINT audin_opensles_parse_addin_args(AudinOpenSLESDevice* device, const A
 {
 	UINT status;
 	DWORD flags;
-	COMMAND_LINE_ARGUMENT_A* arg;
+	const COMMAND_LINE_ARGUMENT_A* arg;
 	AudinOpenSLESDevice* opensles = (AudinOpenSLESDevice*)device;
 	COMMAND_LINE_ARGUMENT_A audin_opensles_args[] = {
 		{ "dev", COMMAND_LINE_VALUE_REQUIRED, "<device>", NULL, NULL, -1, NULL,
@@ -288,23 +287,16 @@ static UINT audin_opensles_parse_addin_args(AudinOpenSLESDevice* device, const A
 	return CHANNEL_RC_OK;
 }
 
-#ifdef BUILTIN_CHANNELS
-#define freerdp_audin_client_subsystem_entry opensles_freerdp_audin_client_subsystem_entry
-#else
-#define freerdp_audin_client_subsystem_entry FREERDP_API freerdp_audin_client_subsystem_entry
-#endif
-
 /**
  * Function description
  *
  * @return 0 on success, otherwise a Win32 error code
  */
-UINT freerdp_audin_client_subsystem_entry(PFREERDP_AUDIN_DEVICE_ENTRY_POINTS pEntryPoints)
+FREERDP_ENTRY_POINT(UINT VCAPITYPE opensles_freerdp_audin_client_subsystem_entry(
+    PFREERDP_AUDIN_DEVICE_ENTRY_POINTS pEntryPoints))
 {
-	const ADDIN_ARGV* args;
-	AudinOpenSLESDevice* opensles;
-	UINT error;
-	opensles = (AudinOpenSLESDevice*)calloc(1, sizeof(AudinOpenSLESDevice));
+	UINT error = ERROR_INTERNAL_ERROR;
+	AudinOpenSLESDevice* opensles = (AudinOpenSLESDevice*)calloc(1, sizeof(AudinOpenSLESDevice));
 
 	if (!opensles)
 	{
@@ -319,7 +311,7 @@ UINT freerdp_audin_client_subsystem_entry(PFREERDP_AUDIN_DEVICE_ENTRY_POINTS pEn
 	opensles->iface.Close = audin_opensles_close;
 	opensles->iface.Free = audin_opensles_free;
 	opensles->rdpcontext = pEntryPoints->rdpcontext;
-	args = pEntryPoints->args;
+	const ADDIN_ARGV* args = pEntryPoints->args;
 
 	if ((error = audin_opensles_parse_addin_args(opensles, args)))
 	{

@@ -17,9 +17,7 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <winpr/config.h>
 
 #include <winpr/crt.h>
 #include <winpr/sysinfo.h>
@@ -44,7 +42,7 @@ void MessagePipe_PostQuit(wMessagePipe* pipe, int nExitCode)
  * Construction, Destruction
  */
 
-wMessagePipe* MessagePipe_New()
+wMessagePipe* MessagePipe_New(void)
 {
 	wMessagePipe* pipe = NULL;
 

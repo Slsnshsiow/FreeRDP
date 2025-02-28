@@ -13,8 +13,9 @@ package com.freerdp.freerdpcore.services;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.net.Uri;
-import androidx.collection.LongSparseArray;
 import android.util.Log;
+
+import androidx.collection.LongSparseArray;
 
 import com.freerdp.freerdpcore.application.GlobalApp;
 import com.freerdp.freerdpcore.application.SessionState;
@@ -23,12 +24,15 @@ import com.freerdp.freerdpcore.domain.ManualBookmark;
 import com.freerdp.freerdpcore.presentation.ApplicationSettingsActivity;
 
 import java.util.ArrayList;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class LibFreeRDP
 {
 	private static final String TAG = "LibFreeRDP";
 	private static EventListener listener;
-	private static boolean mHasH264 = true;
+	private static boolean mHasH264 = false;
 
 	private static final LongSparseArray<Boolean> mInstanceState = new LongSparseArray<>();
 
@@ -41,35 +45,74 @@ public class LibFreeRDP
 	public static final long VERIFY_CERT_FLAG_MATCH_LEGACY_SHA1 = 0x100;
 	public static final long VERIFY_CERT_FLAG_FP_IS_PEM = 0x200;
 
-	static
+	private static boolean tryLoad(String[] libraries)
 	{
-		final String h264 = "openh264";
-		final String[] libraries = { h264,
-			                         "freerdp-openssl",
-			                         "ssl",
-			                         "crypto",
-			                         "jpeg",
-			                         "winpr3",
-			                         "freerdp3",
-			                         "freerdp-client3",
-			                         "freerdp-android3" };
+		boolean success = false;
 		final String LD_PATH = System.getProperty("java.library.path");
-
 		for (String lib : libraries)
 		{
 			try
 			{
 				Log.v(TAG, "Trying to load library " + lib + " from LD_PATH: " + LD_PATH);
 				System.loadLibrary(lib);
+				success = true;
 			}
 			catch (UnsatisfiedLinkError e)
 			{
-				Log.e(TAG, "Failed to load library " + lib + ": " + e.toString());
-				if (lib.equals(h264))
-				{
-					mHasH264 = false;
-				}
+				Log.e(TAG, "Failed to load library " + lib + ": " + e);
+				success = false;
+				break;
 			}
+		}
+
+		return success;
+	}
+
+	private static boolean tryLoad(String library)
+	{
+		return tryLoad(new String[] { library });
+	}
+
+	static
+	{
+		try
+		{
+			System.loadLibrary("freerdp-android");
+
+			/* Load dependent libraries too to trigger JNI_OnLoad calls */
+			String version = freerdp_get_jni_version();
+			String[] versions = version.split("[\\.-]");
+			if (versions.length > 0)
+			{
+				System.loadLibrary("freerdp-client" + versions[0]);
+				System.loadLibrary("freerdp" + versions[0]);
+				System.loadLibrary("winpr" + versions[0]);
+			}
+			Pattern pattern = Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+).*");
+			Matcher matcher = pattern.matcher(version);
+			if (!matcher.matches() || (matcher.groupCount() < 3))
+				throw new RuntimeException("APK broken: native library version " + version +
+				                           " does not meet requirements!");
+			int major = Integer.parseInt(Objects.requireNonNull(matcher.group(1)));
+			int minor = Integer.parseInt(Objects.requireNonNull(matcher.group(2)));
+			int patch = Integer.parseInt(Objects.requireNonNull(matcher.group(3)));
+
+			if (major > 2)
+				mHasH264 = freerdp_has_h264();
+			else if (minor > 5)
+				mHasH264 = freerdp_has_h264();
+			else if ((minor == 5) && (patch >= 1))
+				mHasH264 = freerdp_has_h264();
+			else
+				throw new RuntimeException("APK broken: native library version " + version +
+				                           " does not meet requirements!");
+			Log.i(TAG, "Successfully loaded native library. H264 is " +
+			               (mHasH264 ? "supported" : "not available"));
+		}
+		catch (UnsatisfiedLinkError e)
+		{
+			Log.e(TAG, "Failed to load library: " + e);
+			throw e;
 		}
 	}
 
@@ -77,6 +120,8 @@ public class LibFreeRDP
 	{
 		return mHasH264;
 	}
+
+	private static native boolean freerdp_has_h264();
 
 	private static native String freerdp_get_jni_version();
 
@@ -215,7 +260,7 @@ public class LibFreeRDP
 		String hostname = bookmark.<ManualBookmark>get().getHostname();
 
 		args.add("/v:" + hostname);
-		args.add("/port:" + String.valueOf(port));
+		args.add("/port:" + port);
 
 		arg = bookmark.getUsername();
 		if (!arg.isEmpty())
@@ -235,7 +280,7 @@ public class LibFreeRDP
 
 		args.add(
 		    String.format("/size:%dx%d", screenSettings.getWidth(), screenSettings.getHeight()));
-		args.add("/bpp:" + String.valueOf(screenSettings.getColors()));
+		args.add("/bpp:" + screenSettings.getColors());
 
 		if (advanced.getConsoleMode())
 		{
@@ -245,13 +290,13 @@ public class LibFreeRDP
 		switch (advanced.getSecurity())
 		{
 			case 3: // NLA
-				args.add("/sec-nla");
+				args.add("/sec:nla");
 				break;
 			case 2: // TLS
-				args.add("/sec-tls");
+				args.add("/sec:tls");
 				break;
 			case 1: // RDP
-				args.add("/sec-rdp");
+				args.add("/sec:rdp");
 				break;
 			default:
 				break;
@@ -284,7 +329,6 @@ public class LibFreeRDP
 		args.add(addFlag("themes", flags.getTheming()));
 		args.add(addFlag("fonts", flags.getFontSmoothing()));
 		args.add(addFlag("aero", flags.getDesktopComposition()));
-		args.add(addFlag("glyph-cache", false));
 
 		if (!advanced.getRemoteProgram().isEmpty())
 		{
@@ -297,7 +341,6 @@ public class LibFreeRDP
 		}
 
 		args.add(addFlag("async-channels", debug.getAsyncChannel()));
-		args.add(addFlag("async-input", debug.getAsyncInput()));
 		args.add(addFlag("async-update", debug.getAsyncUpdate()));
 
 		if (advanced.getRedirectSDCard())
@@ -337,7 +380,7 @@ public class LibFreeRDP
 		/* 0 ... local
 		   1 ... remote
 		   2 ... disable */
-		args.add("/audio-mode:" + String.valueOf(advanced.getRedirectSound()));
+		args.add("/audio-mode:" + advanced.getRedirectSound());
 		if (advanced.getRedirectSound() == 0)
 		{
 			args.add("/sound");
@@ -348,7 +391,8 @@ public class LibFreeRDP
 			args.add("/microphone");
 		}
 
-		args.add("/cert-ignore");
+		args.add("/kbd:unicode:on");
+		args.add("/cert:ignore");
 		args.add("/log-level:" + debug.getDebugLevel());
 		String[] arrayArgs = args.toArray(new String[0]);
 		return freerdp_parse_arguments(inst, arrayArgs);
@@ -376,7 +420,7 @@ public class LibFreeRDP
 		int port = openUri.getPort();
 		if (hostname != null)
 		{
-			hostname = hostname + ((port == -1) ? "" : (":" + String.valueOf(port)));
+			hostname = hostname + ((port == -1) ? "" : (":" + port));
 			args.add("/v:" + hostname);
 		}
 
@@ -592,7 +636,8 @@ public class LibFreeRDP
 		return freerdp_get_version();
 	}
 
-	public static interface EventListener {
+	public interface EventListener
+	{
 		void OnPreConnect(long instance);
 
 		void OnConnectionSuccess(long instance);
@@ -604,7 +649,8 @@ public class LibFreeRDP
 		void OnDisconnected(long instance);
 	}
 
-	public static interface UIEventListener {
+	public interface UIEventListener
+	{
 		void OnSettingsChanged(int width, int height, int bpp);
 
 		boolean OnAuthenticate(StringBuilder username, StringBuilder domain,
